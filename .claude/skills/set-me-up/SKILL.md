@@ -7,12 +7,12 @@ description: Walk a new owner through setting up their AI team, one step at a ti
 3. Step 2 of 4, about the business: run the about-my-business training.
 4. Step 3 of 4, the first brief: run steps 1 to 6 of the morning-shift training, then save (Saving in CLAUDE.md). Show the brief in five lines or fewer.
 5. Step 4 of 4, the morning shift. Give these steps one at a time and wait for "done" after each:
-   1. Open claude.ai/code/routines and choose to make a new routine.
-   2. Name it "Morning shift".
-   3. For the instructions, type: Run the morning-shift training.
-   4. Choose this brain's cloud copy, and only this one. The brain's safety rules load only when it is the only copy in the shift.
-   5. Set it to run on weekdays, early in the morning.
-   6. Under connections, remove every connection except Gmail and Google Calendar. In a practice brain, remove them all.
-   7. Save it, then choose Run now.
+   1. Open claude.ai/code/routines (Routines in the left menu), choose New task, then Set up manually.
+   2. Name it "Morning shift". In the instructions box, type: Run the morning-shift training.
+   3. Next to the model name, choose Sonnet, which uses less of your plan.
+   4. Under Trigger, keep Schedule, choose Weekdays and an early morning time.
+   5. Open Advanced settings. On General, set Repository to this brain's cloud copy, and only this one.
+   6. On Connectors, remove every connector except Gmail and Google Calendar with the x next to each. In a practice brain, remove them all.
+   7. Choose Create, then Run now.
 6. Finish in three lines: the team is set up; the morning brief appears in the team chat each weekday; next time, start a session and say "Catch me up".
 7. Never change job pages, helper cards or trainings during setup.
