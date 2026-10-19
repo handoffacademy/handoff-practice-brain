@@ -11,6 +11,7 @@ after the owner approves Claude's own prompt ("ask").
 Exit 0 lets the call run (with the "ask" answer on stdout when the owner must
 approve); exit 2 blocks it with the message on stderr.
 """
+import hashlib
 import json
 import os
 import re
@@ -231,6 +232,10 @@ ROOM_NAMING = {"title": "Team Room", "icon": "team",
                "description": "Your AI team at work: what needs you, who is doing what, today's chat and tasks."}
 PUBLISH_KEYS = {"action", "file_path", "files", "url", "overwrite_unread", "capabilities",
                 "title", "description", "icon", "label"}
+# What the notes looked like at the last Team Room update. Only this guard
+# writes it (the team cannot write .handoff/), and the saved copy never keeps it.
+ROOM_STATE = ".handoff/state/room-sync.json"
+ROOM_SYNC = "the Team Room (steps 2 to 4 of the team-room training)"
 
 
 def exact_file(root, path, rel):
@@ -279,6 +284,159 @@ def room_write(root, tool, path, inp):
     if exact_file(root, path, ROOM_LINK):
         return "deny", "Blocked: the brain records the Team Room link itself, from the page it made."
     return None
+
+
+def notes_print(root, folder, budget):
+    """A fingerprint of every file under one notes folder, as the guard lets the
+    team write them (any name, any depth): every file's size and change time,
+    and contents while budget[0] (bytes still to read) lasts."""
+    h = hashlib.sha256()
+    base = os.path.join(root, folder)
+    entries, seen = [], set()
+    # The guard's own files (.handoff/, its record among them) are never notes,
+    # whatever link leads there: fingerprinting the record would never settle.
+    owner = os.path.realpath(os.path.join(root, ".handoff"))
+    def owners(q):
+        r = os.path.realpath(q)
+        return r == owner or r.startswith(owner + os.sep)
+    # Links are followed (the guard lets the team write through a link that ends
+    # in a working-notes folder), each real folder once, so a loop ends.
+    for top, dirs, files in os.walk(base, followlinks=True):
+        real = os.path.realpath(top)
+        if real in seen or owners(top):
+            dirs[:] = []
+            continue
+        seen.add(real)
+        dirs.sort()
+        for n in files:
+            entries.append(os.path.join(top, n))
+    for p in sorted(entries):
+        if not os.path.isfile(p) or owners(p):
+            continue
+        try:
+            info = os.stat(p)
+        except OSError:
+            continue
+        h.update(("%s\0%d\0%d\0" % (os.path.relpath(p, root), info.st_size, info.st_mtime_ns)).encode("utf-8", "surrogateescape"))
+        if info.st_size <= min(8 << 20, budget[0]):
+            budget[0] -= info.st_size
+            try:
+                with open(p, "rb") as f:
+                    for chunk in iter(lambda: f.read(1 << 20), b""):
+                        h.update(chunk)
+            except OSError:
+                pass
+        h.update(b"\0")
+    return h.hexdigest()
+
+
+def case_folders(root, parts):
+    """Every folder matching parts in any letter case, links included: the guard
+    accepts working notes in any casing, and the cloud's disk tells team/tasks
+    from Team/Tasks."""
+    found = [""]
+    for part in parts:
+        nxt = []
+        for f in found:
+            try:
+                names = sorted(os.listdir(os.path.join(root, f) if f else root))
+            except OSError:
+                continue
+            for n in names:
+                q = os.path.join(f, n) if f else n
+                if n.lower() == part and os.path.isdir(os.path.join(root, q)):
+                    nxt.append(q)
+        found = nxt
+    return found
+
+
+def room_prints(root):
+    budget = [64 << 20]
+    tasks = "".join(notes_print(root, f, budget) for f in case_folders(root, ["team", "tasks"]))
+    chat = "".join(notes_print(root, f, budget) for f in case_folders(root, ["team", "chat"]))
+    tasks = hashlib.sha256(tasks.encode()).hexdigest()
+    return {"tasks": tasks, "notes": hashlib.sha256((tasks + chat).encode()).hexdigest()}
+
+
+def room_state_path(root):
+    """The record's path, or None when any part of the way is a link."""
+    p = os.path.join(root, ROOM_STATE)
+    for q in (os.path.join(root, ".handoff"), os.path.dirname(p), p):
+        if os.path.islink(q):
+            return None
+    return p
+
+
+def read_room_state(root):
+    """The last update's record, or None (everything open) when it is missing,
+    reached through a link, or could not be replaced or removed."""
+    p = room_state_path(root)
+    try:
+        if p is None or not os.access(os.path.dirname(p), os.W_OK) or not os.access(p, os.W_OK):
+            return None
+        with open(p, encoding="utf-8") as f:
+            st = json.load(f)
+        return st if isinstance(st, dict) and isinstance(st.get("tasks"), str) and isinstance(st.get("notes"), str) else None
+    except Exception:
+        return None
+
+
+def write_room_state(root, prints):
+    """Record the notes as the room now shows them. If that cannot be done, drop
+    the old record instead, so a stale one never holds up the team."""
+    p = room_state_path(root)
+    if p is None:
+        return
+    folder = os.path.dirname(p)
+    tmp = os.path.join(folder, "room-sync.%d.tmp" % os.getpid())
+    try:
+        os.makedirs(folder, exist_ok=True)
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(prints, f)
+        os.replace(tmp, p)
+    except OSError:
+        for q in (tmp, p):
+            try:
+                os.remove(q)
+            except OSError:
+                pass
+
+
+def room_can_update(root):
+    """The room exists and its usual update would pass this guard. Otherwise
+    nothing waits on the room: a layout the team could never publish from must
+    not hold up its work."""
+    link = room_link(root)
+    if not link:
+        return False
+    update = {"file_path": os.path.join(root, ROOM_PAGE), "files": {"room.json": os.path.join(root, ROOM_DATA)},
+              "url": link, "overwrite_unread": ["room.json"]}
+    return room_publish(root, update)[0] == "allow"
+
+
+def room_handoff_gate(root):
+    """Before work is handed out: the Team Room shows the work starting, so a
+    handoff waits until the room is updated after the task notes last changed.
+    Open when there is no room yet or no record of the last update."""
+    if not room_can_update(root):
+        return None
+    st = read_room_state(root)
+    if st is None or st["tasks"] == room_prints(root)["tasks"]:
+        return None
+    return "deny", ("Blocked: first update " + ROOM_SYNC + " so the owner sees this work start. Then hand it out. "
+                    "If the update fails, say so in one line and hand it out anyway.")
+
+
+def room_stop(root, data):
+    """At the end of a turn: when the notes changed since the last Team Room
+    update, ask for one update before stopping (never twice in a row)."""
+    if data.get("stop_hook_active") or not room_can_update(root):
+        return None
+    st = read_room_state(root)
+    if st is None or st["notes"] == room_prints(root)["notes"]:
+        return None
+    return ("Your notes changed since the Team Room was last updated. Update " + ROOM_SYNC +
+            " before you finish. If the update fails, say so in one line and finish.")
 
 
 def room_publish(root, inp):
@@ -624,6 +782,10 @@ def decide(tool, inp, root, brain, cwd=None, mode=None):
         if owned:
             return "deny", "Blocked: to change this, write the whole file so the owner can approve every word."
         return "deny", "Blocked: only the owner changes this part of the brain."
+    if tool in ("Agent", "Task"):
+        gate = room_handoff_gate(root)
+        if gate:
+            return gate
     if tool in SAFE:
         return "allow", ""
     if tool == "Artifact":
@@ -677,11 +839,26 @@ def main():
     if not root:
         print("Blocked: the brain guard could not find this brain.", file=sys.stderr)
         return 2
-    if data.get("hook_event_name") == "PostToolUse":
+    event = data.get("hook_event_name")
+    if event == "PostToolUse":
         record_room_link(root, data)
         return 0
-    verdict, reason = decide(str(data.get("tool_name", "")), data.get("tool_input") or {}, root, load_brain(root), data.get("cwd"),
-                             data.get("permission_mode"))
+    if event == "SessionStart":
+        # Changes count from here: a fresh cloud copy has no record of the last update.
+        if room_link(root) and read_room_state(root) is None:
+            write_room_state(root, room_prints(root))
+        return 0
+    if event == "Stop":
+        reason = room_stop(root, data)
+        if reason:
+            print(json.dumps({"decision": "block", "reason": reason}))
+        return 0
+    tool, inp = str(data.get("tool_name", "")), data.get("tool_input") or {}
+    verdict, reason = decide(tool, inp, root, load_brain(root), data.get("cwd"), data.get("permission_mode"))
+    if verdict == "allow" and tool == "Artifact" and isinstance(inp, dict) and inp.get("action", "publish") == "publish":
+        # An update that was tried counts, even if the platform then fails: a
+        # room that cannot be reached never holds up the team's work.
+        write_room_state(root, room_prints(root))
     if verdict == "allow":
         return 0
     if verdict == "ask":
