@@ -457,6 +457,12 @@ def decide(tool, inp, root, brain, cwd=None, mode=None):
     """("allow", ""), ("ask", reason for the owner) or ("deny", reason).
     `mode` is the session's permission mode, as Claude Code reports it."""
     if tool.startswith("mcp__"):
+        # A claude.ai/code session starts with every connector on the account
+        # switched on, so a practice brain would otherwise read the owner's real
+        # email (2026-10-19 test). Only the owner can write brain.json.
+        if brain.get("practice"):
+            return "deny", ("Blocked: this is a practice brain, so it never opens real email or other connections. "
+                            "Use the notes and the practice inbox in the Drop Zone.")
         if mcp_allowed(tool, brain):
             return "allow", ""
         return "deny", "Blocked: on a shift your team only reads and writes drafts. Write a draft or a Needs-you task instead."
