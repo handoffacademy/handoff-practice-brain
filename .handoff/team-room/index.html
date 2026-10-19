@@ -135,7 +135,7 @@ section { display: grid; gap: 12px; min-width: 0; }
     <ul class="shifts" id="shifts"></ul>
   </section>
 
-  <p class="note">This page updates by itself when your team starts work and each time it saves. Only you can see it unless you share it.</p>
+  <p class="note">This page updates by itself as your team works: when work starts, when it is handed out, when a helper finishes and when it is saved. Only you can see it unless you share it.</p>
 </div>
 
 <script>
@@ -183,7 +183,12 @@ section { display: grid; gap: 12px; min-width: 0; }
     if (c && c !== canvas) { canvas = c; ctx = canvas.getContext("2d"); size(); }
     return !!c;
   }
-  var S = 3, colors = {}, people = [], handoffs = [], nextHandoff = 0, needsCount = 0, briefLine = "", last = 0, hi = 0;
+  var S = 3, colors = {}, people = [], handoffs = [], nextHandoff = 0, needsCount = 0, briefLine = "", last = 0;
+  // Movement means real work: someone types only while a task or helper is working in a fresh update,
+  // and each new update plays its handoffs and deliveries once, then the office settles.
+  var hasWorking = false, stale = false, lastSig = null;
+  function busy() { return hasWorking && !stale; }
+  function typing(p) { return busy() && p.state === "working" && p.mode === "sit"; }
 
   function readColors() {
     var cs = getComputedStyle(document.documentElement);
@@ -251,7 +256,6 @@ section { display: grid; gap: 12px; min-width: 0; }
 
   function drawDesk(p, t) {
     var dx = p.desk[0], dy = p.desk[1];
-    var working = p.state === "working" && p.mode === "sit";
     // Monitor back and its glow.
     // Chair back behind the seat.
     px(dx + 5, dy + 3, 10, 9, colors["--desk-front"]); px(dx + 5, dy + 3, 10, 1, colors["--metal"]);
@@ -260,7 +264,7 @@ section { display: grid; gap: 12px; min-width: 0; }
     var dx = p.desk[0], dy = p.desk[1];
     px(dx, dy + 12, 30, 8, colors["--desk-top"]); px(dx, dy + 20, 30, 7, colors["--desk-front"]);
     // Monitor on the right of the desk, screen facing the seat.
-    var working = p.state === "working" && p.mode === "sit";
+    var working = typing(p);
     if (working) px(dx + 15, dy + 1, 15, 13, "rgba(136,206,238," + (0.3 + 0.15 * Math.sin(performance.now() / 200)) + ")");
     px(dx + 17, dy + 3, 11, 9, colors["--metal"]); px(dx + 22, dy + 12, 2, 2, colors["--metal"]);
     px(dx + 18, dy + 4, 2, 7, working ? "#88ceee" : "#5a6155");
@@ -279,7 +283,7 @@ section { display: grid; gap: 12px; min-width: 0; }
     px(x, y + 6, 8, 5, p.shirt); px(x, y + 6, 8, 1, ink);
     if (p.chief) px(x + 3, y + 7, 2, 4, "#ff7900");
     // Arms: typing at the desk, swinging when walking.
-    var a = seated && p.state === "working" ? Math.floor(t / 120) % 2 : step;
+    var a = typing(p) ? Math.floor(t / 120) % 2 : step;
     px(x - 1, y + 7 + a, 1, 3, p.shirt); px(x + 8, y + 8 - a, 1, 3, p.shirt);
     // Head.
     px(x + 1, y + 1, 6, 5, p.skin); px(x + 1, y, 6, 2, p.hair); px(x, y + 1, 1, 3, p.hair);
@@ -303,41 +307,41 @@ section { display: grid; gap: 12px; min-width: 0; }
   function walkTo(p, to) { route(p, to).forEach(function (q) { p.plan.push({ k: "walk", to: q }); }); }
 
   function basePlan(p) {
-    var st = p.state, i = p.i;
-    if (st === "resting") {
-      var spot = COOLER_SPOTS[i % COOLER_SPOTS.length];
+    // Settled: nobody walks unless an update just arrived.
+    if (p.state === "resting") {
+      var spot = COOLER_SPOTS[p.i % COOLER_SPOTS.length];
       if (Math.abs(p.x - spot.x) > 1 || Math.abs(p.y - spot.y) > 1) walkTo(p, spot);
-      p.plan.push({ k: "wait", ms: 3000 + (i * 900) % 4000, say: Math.random() < 0.5 ? SMALL_TALK[(i + Math.floor(Math.random() * 6)) % SMALL_TALK.length] : "", mug: true });
-    } else if (st === "needs you") {
-      if (!p.atSeat) { walkTo(p, homeSeat(p)); p.plan.push({ k: "sit" }); }
-      p.plan.push({ k: "wait", ms: 2500 });
-      p.plan.push({ k: "carry", on: true });
-      walkTo(p, YOU_SPOT);
-      p.plan.push({ k: "wait", ms: 3500, say: "Needs you!", accent: "#ff7900" });
-      p.plan.push({ k: "carry", on: false });
-      walkTo(p, homeSeat(p)); p.plan.push({ k: "sit" });
-    } else if (st === "done today") {
-      if (!p.atSeat) { walkTo(p, homeSeat(p)); p.plan.push({ k: "sit" }); }
-      p.plan.push({ k: "wait", ms: 6000 + (i * 1300) % 5000 });
-      walkTo(p, COOLER_SPOTS[i % COOLER_SPOTS.length]);
-      p.plan.push({ k: "wait", ms: 2500, say: "Done for today", mug: true });
-      walkTo(p, homeSeat(p)); p.plan.push({ k: "sit" });
+      p.plan.push({ k: "wait", ms: 60000, mug: true });
     } else {
       if (!p.atSeat) { walkTo(p, homeSeat(p)); p.plan.push({ k: "sit" }); }
-      p.plan.push({ k: "wait", ms: 5000 });
+      p.plan.push({ k: "wait", ms: 60000 });
     }
+  }
+
+  function deliver(p, delay) {
+    p.plan = []; p.events = 1;
+    if (!p.atSeat) { walkTo(p, homeSeat(p)); p.plan.push({ k: "sit" }); }
+    p.plan.push({ k: "wait", ms: delay });
+    p.plan.push({ k: "carry", on: true });
+    walkTo(p, YOU_SPOT);
+    p.plan.push({ k: "wait", ms: 3000, say: "Needs you!", accent: "#ff7900" });
+    p.plan.push({ k: "carry", on: false });
+    walkTo(p, homeSeat(p)); p.plan.push({ k: "sit" }); p.plan.push({ k: "settled" });
   }
 
   function startHandoff(h) {
     var from = people.filter(function (p) { return p.name === h.from; })[0];
     var to = people.filter(function (p) { return p.name === h.to; })[0];
     if (!from || !to || from === to) return false;
-    from.plan = []; from.mug = false;
+    // Queued event work (a trip to your desk, earlier handoffs) stays; this handoff follows it.
+    if (!from.events) { from.plan = []; from.events = 0; }
+    from.events++;
+    from.mug = false;
     from.plan.push({ k: "carry", on: true });
     walkTo(from, { x: to.desk[0] - 8, y: to.desk[1] });
     from.plan.push({ k: "wait", ms: 2600, say: h.text });
     from.plan.push({ k: "give", to: to });
-    walkTo(from, homeSeat(from)); from.plan.push({ k: "sit" });
+    walkTo(from, homeSeat(from)); from.plan.push({ k: "sit" }); from.plan.push({ k: "settled" });
     return true;
   }
 
@@ -356,6 +360,8 @@ section { display: grid; gap: 12px; min-width: 0; }
       if (performance.now() - act.started >= act.ms) { p.plan.shift(); p.mug = false; }
     } else if (act.k === "sit") {
       var s = seatOf(p); p.x = s.x; p.y = s.y; p.mode = "sit"; p.atSeat = true; p.plan.shift();
+    } else if (act.k === "settled") {
+      p.events = Math.max(0, (p.events || 0) - 1); p.plan.shift();
     } else if (act.k === "carry") {
       p.carrying = act.on; p.plan.shift();
     } else if (act.k === "give") {
@@ -371,9 +377,8 @@ section { display: grid; gap: 12px; min-width: 0; }
       if (!reduce) {
         people.forEach(function (p) { step(p, dt); });
         if (handoffs.length && now > nextHandoff) {
-          var tries = handoffs.length;
-          while (tries-- && !startHandoff(handoffs[hi % handoffs.length])) hi++;
-          hi++; nextHandoff = now + 9000;
+          while (handoffs.length && !startHandoff(handoffs.shift())) {}
+          nextHandoff = now + 9000;
         }
       }
       draw(now);
@@ -393,7 +398,16 @@ section { display: grid; gap: 12px; min-width: 0; }
     if (!people.length) label("Your team will show up here after its first update.", W / 2, 70, 8, colors["--ink"] === "#10120e" ? "#10120e" : "#f5fafc");
   }
 
+  function describe() {
+    canvas.setAttribute("aria-label", people.length
+      ? "The office floor: " + people.map(function (p) { return p.name + " is " + p.state; }).join(", ") + (needsCount ? ". " + needsCount + " things wait on your desk." : ".") + (busy() ? "" : " Nobody is working right now.")
+      : "The office floor, empty until the team's first update.");
+  }
   function setOffice(helpers, chat, tasks, brief) {
+    // The page checks for news every two minutes; the same data leaves everyone and their queued walks alone.
+    var sig = JSON.stringify([helpers, chat, tasks]);
+    if (sig === lastSig) { briefLine = brief[0] || ""; describe(); draw(performance.now()); return; }
+    lastSig = sig;
     var names = Object.create(null);
     var prev = Object.create(null);
     people.forEach(function (p) { prev[p.name] = p; });
@@ -409,6 +423,7 @@ section { display: grid; gap: 12px; min-width: 0; }
       var s = seatOf(p);
       p.x = old ? old.x : s.x; p.y = old ? old.y : s.y;
       if (old) { p.mode = old.mode; p.atSeat = old.atSeat; }
+      else if (st === "resting" && !reduce) { var c = COOLER_SPOTS[i % COOLER_SPOTS.length]; p.x = c.x; p.y = c.y; p.mode = "stand"; p.atSeat = false; p.mug = true; }
       if (reduce) {
         var spot = st === "resting" ? COOLER_SPOTS[i % COOLER_SPOTS.length] : (st === "needs you" ? YOU_SPOT : null);
         if (spot) { p.x = spot.x; p.y = spot.y; p.mode = "stand"; p.atSeat = false; p.mug = st === "resting"; p.carrying = st === "needs you"; }
@@ -417,15 +432,17 @@ section { display: grid; gap: 12px; min-width: 0; }
       names[name] = true;
       return p;
     });
-    handoffs = chat.filter(function (m) { return names[text(m.from)] && names[text(m.to)]; }).slice(0, 6).map(function (m) {
+    needsCount = tasks.filter(function (t) { return text(t.status) === "Needs you"; }).length;
+    hasWorking = tasks.some(function (t) { return text(t.status) === "Working"; }) ||
+      helpers.some(function (h) { return text(h.state).toLowerCase() === "working"; });
+    briefLine = brief[0] || "";
+    // Play an update once: its handoffs (oldest first) and one trip to your desk per helper who needs you.
+    handoffs = chat.filter(function (m) { return names[text(m.from)] && names[text(m.to)]; }).slice(0, 6).reverse().map(function (m) {
       return { from: text(m.from), to: text(m.to), text: text(m.text) };
     });
-    needsCount = tasks.filter(function (t) { return text(t.status) === "Needs you"; }).length;
-    briefLine = brief[0] || "";
     nextHandoff = performance.now() + 1500;
-    canvas.setAttribute("aria-label", people.length
-      ? "The office floor: " + people.map(function (p) { return p.name + " is " + p.state; }).join(", ") + (needsCount ? ". " + needsCount + " things wait on your desk." : ".")
-      : "The office floor, empty until the team's first update.");
+    if (!reduce) people.filter(function (p) { return p.state === "needs you"; }).forEach(function (p, n) { deliver(p, 1000 + n * 2500); });
+    describe();
     draw(performance.now());
   }
 
@@ -447,13 +464,17 @@ section { display: grid; gap: 12px; min-width: 0; }
       // The team may know only the date: compare calendar days, not hours.
       var today = new Date(), d = updatedAt;
       var same = d.getUTCFullYear() === today.getFullYear() && d.getUTCMonth() === today.getMonth() && d.getUTCDate() === today.getDate();
+      stale = !same;
       box.classList.toggle("resting", !same);
-      t.textContent = same ? "Updated today" : "The team is resting. Last update " + d.toLocaleDateString(undefined, { timeZone: "UTC" });
+      t.textContent = same ? "Updated today. " + (busy() ? "The team is working." : "Nobody is working right now.") : "The team is resting. Last update " + d.toLocaleDateString(undefined, { timeZone: "UTC" }) + ". Nobody is working right now.";
+      describe();
       return;
     }
     var age = Date.now() - updatedAt.getTime(), resting = age > 2 * 3600 * 1000;
+    stale = resting;
     box.classList.toggle("resting", resting);
-    t.textContent = (resting ? "The team is resting. Last update " : "Updated ") + ago(Math.max(0, age));
+    t.textContent = (resting ? "The team is resting. Last update " : "Updated ") + ago(Math.max(0, age)) + (busy() ? ". The team is working." : ". Nobody is working right now.");
+    describe();
     box.title = updatedAt.toLocaleString();
   }
 
@@ -470,6 +491,7 @@ section { display: grid; gap: 12px; min-width: 0; }
     var chatItems = list(d.chat).filter(function (m) { return m && typeof m === "object" && text(m.text); });
     var b = list(d.brief).map(text).filter(Boolean);
     setOffice(helpers, chatItems, tasks, b);
+    tickStatus();
 
     var roster = clear("roster");
     helpers.slice(0, 8).forEach(function (h, i) {
