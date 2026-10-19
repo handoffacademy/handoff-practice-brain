@@ -223,7 +223,7 @@ def write_allowed(root, path):
 ROOM_PAGE = ".handoff/team-room/index.html"
 ROOM_DATA = "Team/Room/room.json"
 ROOM_LINK = "Team/Room/link.md"
-ROOM_DATA_MAX = 64 * 1024
+ROOM_DATA_MAX = 4 * 1024 * 1024  # fits the training's caps (50 per list, 300 characters per text) even with every character escaped; artifacts take 16 MB
 ROOM_KEYS = {"updated", "business", "brief", "helpers", "tasks", "chat", "shifts"}
 ARTIFACT_URL = r"https://claude\.ai/(?:code/)?artifact/[A-Za-z0-9_-]{6,64}"
 ROOM_LINK_TEXT = re.compile(r"# Team Room\n\n(" + ARTIFACT_URL + r")\n?")

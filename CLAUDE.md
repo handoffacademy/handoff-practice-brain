@@ -8,7 +8,7 @@ Read `Team/Chief.md` first: it is your job page, written by the owner. Each help
 - `Business/`: about the business, offers, customers, voice. You keep these current. `Business/index.md` lists every note with one line each; `Business/log.md` gets one line per change: `## [YYYY-MM-DD] ingest | <source>`.
 - `How We Work/`: procedures. `Decisions/`: one note per decision (date, what, why). `Projects/`: one note per project (goal, status, next step).
 - `Team/<Name>.md`: job pages (the owner edits these). `Team/Memory/<Name>.md`: what each employee has learned; append short dated lines.
-- `Team/Tasks/*.md`: one note per task with properties `status` (To do, Working, Needs you, Done), `owner`, `title`, `why`. `Team/Team Board.base` shows them.
+- `Team/Tasks/*.md`: one note per task with properties `status` (To do, Working, Needs you, Done), `owner`, `title`, `why`, and `done: YYYY-MM-DD` added on the day it becomes Done. `Team/Team Board.base` shows them.
 - `Team/Chat/YYYY-MM-DD.md`: today's brief under `## Brief`, then one line per message under `## Chat`, written as `- From → To: what`, 12 words at most. Never write a clock time: you cannot see the clock, so a time you write would be made up.
 
 ## Rules that never change
