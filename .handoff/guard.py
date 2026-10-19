@@ -86,6 +86,11 @@ BRANCH_PUSH = SAFE_GIT + r"push -u origin refs/heads/(" + SESSION_BRANCH + r"):r
 LISTING = r"""ls(?: +(?:-[1aAlRtrhF]+|'[^'\n]*'|"[^"$`\\\n]*"|[A-Za-z0-9_./*~-]+))* *"""
 MARKER = os.path.join(".handoff", "brain.json")
 
+# Off: in a claude.ai/code session in auto mode, Claude's approval prompt was
+# resolved to "approved" without the owner's click (2026-10-19 test), so it is
+# not the owner's consent. Owner files stay locked. The checks below stay
+# tested for the day a reliable approval path exists.
+OWNER_APPROVALS = False
 # Files only the owner changes, each in one exact place and one plain form, so
 # an approved change can never carry a program or reach an instruction file.
 JOB_PAGE = re.compile(r"Team/([A-Za-z0-9][A-Za-z0-9 -]{0,40})\.md")
@@ -455,6 +460,8 @@ def decide(tool, inp, root, brain, cwd=None):
         if write_allowed(root, path):
             return "allow", ""
         owned = owner_file(root, path)
+        if owned and not OWNER_APPROVALS:
+            return "deny", "Blocked: only the owner changes job pages, helper cards and trainings. Save the idea as a Needs-you task note instead."
         if owned and tool == "Write":
             return owner_write(path, owned, inp.get("content"))
         if owned:
