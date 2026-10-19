@@ -3,7 +3,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&display=swap">
 <style>
-/* Layout: a status strip, the office floor (the team at their desks, the water cooler, your desk), then "Needs you", then chat beside the task board (stacked on phones), then shifts. */
+/* Layout: a status strip, the office floor (the team at their desks, the water cooler, your desk), then the task board across the full width, then the brief beside the shifts (stacked on phones). */
 :root {
   --bg: #eef1f3;
   --panel: #ffffff;
@@ -13,7 +13,6 @@
   --lime: #d7ff3f;
   --sky: #88ceee;
   --orange: #ff7900;
-  --on-lime: #10120e;
   --font: "Satoshi", "Helvetica Neue", Arial, sans-serif;
   --pixel: "VT323", "Courier New", monospace;
   --radius: 12px;
@@ -58,38 +57,36 @@ section { display: grid; gap: 12px; min-width: 0; }
 .chip.needs-you { background: var(--orange); color: #10120e; border-color: #10120e; }
 .chip.done-today { background: var(--lime); color: #10120e; border-color: #10120e; }
 .chip.resting { background: transparent; color: var(--muted); border-color: var(--line); }
-.needs { background: var(--lime); color: var(--on-lime); border-radius: var(--radius); padding: 18px; display: grid; gap: 10px; }
-.needs h2 { color: var(--on-lime); }
-.needs ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
-.needs li { display: grid; gap: 2px; padding-top: 10px; border-top: 1px solid rgb(16 18 14 / 0.25); }
-.needs li:first-child { border-top: 0; padding-top: 0; }
-.needs .t { font-weight: 700; }
-.needs .w { font-size: 0.95rem; }
-.cols { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 28px; align-items: start; }
+.cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; align-items: start; }
 @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
 .brief { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
-.brief ul, .chat, .shifts { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.brief ul, .shifts { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
 .brief li { padding-left: 14px; position: relative; overflow-wrap: anywhere; }
 .brief li::before { content: ""; position: absolute; left: 0; top: 0.65em; width: 6px; height: 6px; background: var(--ink); }
-.chat li { display: grid; gap: 2px; padding-block: 8px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
-.chat li:last-child { border-bottom: 0; }
-.chat .who { font-weight: 700; font-size: 0.92rem; }
-.chat .arrow { color: var(--muted); font-weight: 400; }
-.board { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-@media (max-width: 480px) { .board { grid-template-columns: 1fr; } }
+.board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 960px) { .board { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .board { grid-template-columns: 1fr; } }
 .lane { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; display: grid; gap: 8px; align-content: start; min-width: 0; }
 .lane h3 { font-size: 0.95rem; display: flex; justify-content: space-between; gap: 8px; }
 .lane h3 .n { color: var(--muted); font-variant-numeric: tabular-nums; }
 .lane.needs-you { border: 2px solid var(--ink); }
-.task { display: grid; gap: 2px; padding-top: 8px; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
-.task .t { font-weight: 600; font-size: 0.95rem; }
-.task .meta { color: var(--muted); font-size: 0.85rem; }
+.task { display: grid; gap: 4px; padding: 10px 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; overflow-wrap: anywhere; }
+.task .t { font-weight: 700; font-size: 0.95rem; line-height: 1.3; }
+.task .w { font-size: 0.9rem; }
+.task .meta { color: var(--muted); font-size: 0.82rem; }
+.lane.working .task { border-left: 4px solid var(--sky); }
+.lane.needs-you .task { border-left: 4px solid var(--orange); }
+.live { display: inline-flex; align-items: center; gap: 6px; font-size: 0.78rem; font-weight: 700; color: var(--muted); }
+.live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--sky); border: 1.5px solid var(--ink); }
+.board.busy .live::before { animation: pulse 1.2s ease-in-out infinite; }
+.board:not(.busy) .live { display: none; }
+@keyframes pulse { 50% { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) { .board.busy .live::before { animation: none; } }
 .shifts li { display: flex; flex-wrap: wrap; gap: 4px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 14px; }
 .shifts .k { font-weight: 700; }
 .shifts .d { color: var(--muted); font-variant-numeric: tabular-nums; }
 .shifts .s { flex-basis: 100%; overflow-wrap: anywhere; }
-.none, .empty { color: var(--muted); font-size: 0.95rem; }
-.needs .empty { color: var(--on-lime); font-weight: 600; }
+.none { color: var(--muted); font-size: 0.95rem; }
 .note { color: var(--muted); font-size: 0.85rem; }
 </style>
 
@@ -108,32 +105,21 @@ section { display: grid; gap: 12px; min-width: 0; }
     <ul class="roster" id="roster"></ul>
   </section>
 
-  <section class="needs" aria-labelledby="needs-h">
-    <h2 id="needs-h">Needs you</h2>
-    <ul id="needs"></ul>
+  <section aria-labelledby="board-h">
+    <h2 id="board-h">Tasks</h2>
+    <div class="board" id="board"></div>
   </section>
 
   <div class="cols">
-    <div style="display:grid;gap:28px;min-width:0">
-      <section aria-labelledby="brief-h">
-        <h2 id="brief-h">Today's brief</h2>
-        <div class="brief"><ul id="brief"></ul></div>
-      </section>
-      <section aria-labelledby="chat-h">
-        <h2 id="chat-h">Team chat</h2>
-        <ul class="chat" id="chat"></ul>
-      </section>
-    </div>
-    <section aria-labelledby="board-h">
-      <h2 id="board-h">Tasks</h2>
-      <div class="board" id="board"></div>
+    <section aria-labelledby="brief-h">
+      <h2 id="brief-h">Today's brief</h2>
+      <div class="brief"><ul id="brief"></ul></div>
+    </section>
+    <section aria-labelledby="shifts-h">
+      <h2 id="shifts-h">Shifts</h2>
+      <ul class="shifts" id="shifts"></ul>
     </section>
   </div>
-
-  <section aria-labelledby="shifts-h">
-    <h2 id="shifts-h">Shifts</h2>
-    <ul class="shifts" id="shifts"></ul>
-  </section>
 
   <p class="note">This page updates by itself as your team works: when work starts, when it is handed out, when a helper finishes and when it is saved. Only you can see it unless you share it.</p>
 </div>
@@ -157,7 +143,7 @@ section { display: grid; gap: 12px; min-width: 0; }
   // Names and states come from notes, so lookups never reach built-in properties.
   function own(o, k) { return Object.prototype.hasOwnProperty.call(o, k) ? o[k] : undefined; }
   var LABEL = { "working": "Working", "needs-you": "Needs you", "done-today": "Done today", "resting": "Resting" };
-  var LANES = ["Needs you", "Working", "To do", "Done"];
+  var LANES = ["Working", "Needs you", "To do", "Done"];
   var updatedAt = null;
 
   // ---------- The office floor ----------
@@ -399,6 +385,8 @@ section { display: grid; gap: 12px; min-width: 0; }
   }
 
   function describe() {
+    var board = document.getElementById("board");
+    if (board) board.classList.toggle("busy", busy());
     canvas.setAttribute("aria-label", people.length
       ? "The office floor: " + people.map(function (p) { return p.name + " is " + p.state; }).join(", ") + (needsCount ? ". " + needsCount + " things wait on your desk." : ".") + (busy() ? "" : " Nobody is working right now.")
       : "The office floor, empty until the team's first update.");
@@ -503,37 +491,14 @@ section { display: grid; gap: 12px; min-width: 0; }
       roster.appendChild(li);
     });
 
-    var needs = tasks.filter(function (t) { return text(t.status) === "Needs you"; });
-    var nList = clear("needs");
-    if (!needs.length) nList.appendChild(el("li", "empty", "Nothing needs you right now."));
-    needs.forEach(function (t) {
-      var li = el("li");
-      li.appendChild(el("span", "t", text(t.title)));
-      var why = text(t.why);
-      if (why) li.appendChild(el("span", "w", why));
-      nList.appendChild(li);
-    });
-
     var brief = clear("brief");
     if (!b.length) brief.appendChild(el("li", "none", "No brief yet today."));
     b.forEach(function (line) { brief.appendChild(el("li", "", line)); });
 
-    var chat = clear("chat");
-    if (!chatItems.length) chat.appendChild(el("li", "none", "No chat yet today."));
-    chatItems.forEach(function (m) {
-      var li = el("li");
-      var who = el("span", "who", text(m.from) || "Team");
-      var to = text(m.to);
-      if (to) { who.appendChild(el("span", "arrow", " → ")); who.appendChild(document.createTextNode(to)); }
-      li.appendChild(who);
-      li.appendChild(el("span", "", text(m.text)));
-      chat.appendChild(li);
-    });
-
     var board = clear("board");
     LANES.forEach(function (lane) {
       var items = tasks.filter(function (t) { return text(t.status) === lane; });
-      var box = el("div", "lane" + (lane === "Needs you" ? " needs-you" : ""));
+      var box = el("div", "lane " + lane.toLowerCase().replace(/ /g, "-"));
       var h = el("h3");
       h.appendChild(el("span", "", lane === "Done" ? "Done today" : lane));
       h.appendChild(el("span", "n", String(items.length)));
@@ -541,7 +506,10 @@ section { display: grid; gap: 12px; min-width: 0; }
       if (!items.length) box.appendChild(el("p", "none", "None"));
       items.forEach(function (t) {
         var row = el("div", "task");
+        if (lane === "Working") row.appendChild(el("span", "live", "Working now"));
         row.appendChild(el("span", "t", text(t.title)));
+        var why = text(t.why);
+        if (why) row.appendChild(el("span", "w", why));
         var meta = [text(t.owner), text(t.date)].filter(Boolean).join(" · ");
         if (meta) row.appendChild(el("span", "meta", meta));
         box.appendChild(row);
@@ -564,9 +532,7 @@ section { display: grid; gap: 12px; min-width: 0; }
 
   function empty(msg) {
     document.getElementById("status-text").textContent = msg;
-    clear("needs").appendChild(el("li", "empty", "Nothing yet."));
-    clear("brief").appendChild(el("li", "none", "No brief yet."));
-    clear("chat").appendChild(el("li", "none", "No chat yet. In a session, say \"Update my Team Room\"."));
+    clear("brief").appendChild(el("li", "none", "No brief yet. In a session, say \"Update my Team Room\"."));
     clear("shifts").appendChild(el("li", "none", "No shifts yet."));
     clear("board"); clear("roster");
     setOffice([], [], [], []);
