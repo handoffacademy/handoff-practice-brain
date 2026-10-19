@@ -36,6 +36,17 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Artifact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "d=\"${CLAUDE_PROJECT_DIR:-$PWD}\"; while [ \"$d\" != \"/\" ] && [ ! -f \"$d/.handoff/guard.py\" ]; do d=\"$(dirname \"$d\")\"; done; [ -f \"$d/.handoff/guard.py\" ] || { echo \"Blocked: the brain guard is missing.\" >&2; exit 2; }; python3 \"$d/.handoff/guard.py\" || exit 2"
+          }
+        ]
+      }
     ]
   }
 }

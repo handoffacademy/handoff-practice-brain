@@ -100,7 +100,7 @@ JOB_PAGE = re.compile(r"Team/([A-Za-z0-9][A-Za-z0-9 -]{0,40})\.md")
 HELPER_CARD = re.compile(r"\.claude/agents/([a-z0-9][a-z0-9-]{0,40})\.md")
 TRAINING = re.compile(r"(?:\.claude/skills|Trainings)/([a-z0-9][a-z0-9-]{0,40})/SKILL\.md")
 BUILT_IN_TRAININGS = {"about-my-business", "catch-me-up", "morning-shift", "friday-review", "tidy-the-brain",
-                      "make-a-training", "hire-someone", "set-me-up"}
+                      "make-a-training", "hire-someone", "set-me-up", "team-room"}
 HELPER_NAME = r"[A-Za-z0-9][A-Za-z0-9 -]{0,40}"
 HELPER_ROLE = r"[a-z0-9][a-z0-9 ,'-]{0,59}"
 # A training's top block holds only its name and a one-line description, with
@@ -214,6 +214,148 @@ def write_allowed(root, path):
     if os.path.islink(path):
         return False
     return working_note(os.path.realpath(root), os.path.realpath(path))
+
+
+# The Team Room: a private page on claude.ai where the owner watches the team.
+# The page itself is the owner's (in .handoff/); the team writes only its data
+# file and, once, the note that holds the page's link, and the one publish it
+# may make sends exactly those two to exactly that page.
+ROOM_PAGE = ".handoff/team-room/index.html"
+ROOM_DATA = "Team/Room/room.json"
+ROOM_LINK = "Team/Room/link.md"
+ROOM_DATA_MAX = 64 * 1024
+ROOM_KEYS = {"updated", "business", "brief", "helpers", "tasks", "chat", "shifts"}
+ARTIFACT_URL = r"https://claude\.ai/(?:code/)?artifact/[A-Za-z0-9_-]{6,64}"
+ROOM_LINK_TEXT = re.compile(r"# Team Room\n\n(" + ARTIFACT_URL + r")\n?")
+ROOM_NAMING = {"title": "Team Room", "icon": "team",
+               "description": "Your AI team at work: what needs you, who is doing what, today's chat and tasks."}
+PUBLISH_KEYS = {"action", "file_path", "files", "url", "overwrite_unread", "capabilities",
+                "title", "description", "icon", "label"}
+
+
+def exact_file(root, path, rel):
+    """`path` is exactly <root>/<rel>, written absolute, with no link anywhere on the way."""
+    if not isinstance(path, str) or not path.startswith("/") or os.path.normpath(path) != path:
+        return False
+    if relative(root, path) != rel or os.path.islink(path):
+        return False
+    return os.path.realpath(path) == os.path.join(os.path.realpath(root), rel)
+
+
+def room_link(root):
+    """The Team Room's address: None before the page exists, False when the
+    link note is not in its one form."""
+    p = os.path.join(root, ROOM_LINK)
+    if not os.path.lexists(p):
+        return None
+    if not exact_file(root, p, ROOM_LINK) or not os.path.isfile(p):
+        return False
+    try:
+        with open(p, encoding="utf-8") as f:
+            m = ROOM_LINK_TEXT.fullmatch(f.read(4096))
+    except Exception:
+        return False
+    return m.group(1) if m else False
+
+
+def room_data_ok(content):
+    if not isinstance(content, str) or len(content.encode("utf-8")) > ROOM_DATA_MAX:
+        return False
+    try:
+        data = json.loads(content)
+    except Exception:
+        return False
+    return isinstance(data, dict) and set(data) <= ROOM_KEYS
+
+
+def room_write(root, tool, path, inp):
+    """The Team Room's two files, whole-file writes only; None for any other path."""
+    if exact_file(root, path, ROOM_DATA):
+        if tool != "Write":
+            return "deny", "Blocked: write the Team Room data as one whole file."
+        if not room_data_ok(inp.get("content")):
+            return "deny", "Blocked: the Team Room data is one small JSON object in the form the team-room training gives."
+        return "allow", ""
+    if exact_file(root, path, ROOM_LINK):
+        return "deny", "Blocked: the brain records the Team Room link itself, from the page it made."
+    return None
+
+
+def room_publish(root, inp):
+    """The one use of the Artifact tool: read or republish the Team Room."""
+    link = room_link(root)
+    if link is False:
+        return "deny", "Blocked: the Team Room link note is not in its usual form. The owner fixes it."
+    action = inp.get("action", "publish")
+    if action == "read":
+        if set(inp) <= {"action", "url"} and link and inp.get("url") == link:
+            return "allow", ""
+        return "deny", "Blocked: the team reads only its own Team Room page."
+    if action != "publish" or not set(inp) <= PUBLISH_KEYS:
+        return "deny", "Blocked: the team only updates its Team Room page."
+    if inp.get("capabilities", {}) != {}:
+        return "deny", "Blocked: the Team Room page needs no extra permissions."
+    if any(k in inp and inp[k] != v for k, v in ROOM_NAMING.items()) or "label" in inp:
+        return "deny", "Blocked: the Team Room page keeps its own name, icon and description."
+    files = inp.get("files")
+    if (not exact_file(root, inp.get("file_path"), ROOM_PAGE) or not isinstance(files, dict)
+            or set(files) != {"room.json"} or not exact_file(root, files["room.json"], ROOM_DATA)):
+        return "deny", "Blocked: the Team Room publishes only its own page and its data file."
+    if inp.get("overwrite_unread", ["room.json"]) != ["room.json"]:
+        return "deny", "Blocked: the Team Room replaces only its own data file."
+    url = inp.get("url")
+    if link is None and "url" in inp:
+        return "deny", "Blocked: until the Team Room exists, the team only makes a new page."
+    if link is not None and url != link:
+        return "deny", "Blocked: the team publishes only to its own Team Room page."
+    return "allow", ""
+
+
+
+
+def published_url(root, response):
+    """The new page's link from the platform's publish result (its structured
+    answer, never text): a newly made page, owned by the owner and visible
+    only to them, from the Team Room page file with only its data file."""
+    if not isinstance(response, dict):
+        return None
+    url = response.get("url")
+    files = response.get("files_written")
+    if not (isinstance(url, str) and re.fullmatch(ARTIFACT_URL, url)):
+        return None
+    if response.get("owned") is not True or response.get("updated") is not False or response.get("audience") != "owner":
+        return None
+    if not exact_file(root, response.get("path"), ROOM_PAGE):
+        return None
+    if not (isinstance(files, list) and [f.get("path") if isinstance(f, dict) else None for f in files] == ["room.json"]):
+        return None
+    return url
+
+
+def record_room_link(root, data):
+    """After the first Team Room publish succeeds, write the link note from the
+    platform's own answer (hook input, not anything the team wrote), once."""
+    inp = data.get("tool_input") if isinstance(data.get("tool_input"), dict) else {}
+    # After it runs, the platform adds its own "__artifact..." notes to the input;
+    # the check before the call refused any such key, so they are the platform's.
+    inp = {k: v for k, v in inp.items() if not k.startswith("__artifact")}
+    if data.get("tool_name") != "Artifact" or "url" in inp or room_link(root) is not None:
+        return
+    if room_publish(root, inp)[0] != "allow":
+        return
+    url = published_url(root, data.get("tool_response"))
+    if not url:
+        return
+    p = os.path.join(root, ROOM_LINK)
+    try:
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        if not exact_file(root, p, ROOM_LINK):
+            return
+        fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o644)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write("# Team Room\n\n" + url + "\n")
+    except OSError:
+        return
 
 
 def owner_file(root, path):
@@ -470,6 +612,9 @@ def decide(tool, inp, root, brain, cwd=None, mode=None):
         path = inp.get("file_path") or inp.get("notebook_path")
         if write_allowed(root, path):
             return "allow", ""
+        room = room_write(root, tool, path, inp)
+        if room:
+            return room
         owned = owner_file(root, path)
         if owned and mode not in APPROVAL_MODES:
             return "deny", ("Blocked: a new helper or training needs the owner's click. Ask the owner to choose Accept edits "
@@ -481,6 +626,8 @@ def decide(tool, inp, root, brain, cwd=None, mode=None):
         return "deny", "Blocked: only the owner changes this part of the brain."
     if tool in SAFE:
         return "allow", ""
+    if tool == "Artifact":
+        return room_publish(root, inp if isinstance(inp, dict) else {})
     if tool == "Bash":
         cmd = str(inp.get("command", "")).strip()
         if "\n" not in cmd and re.fullmatch(LISTING, cmd):
@@ -530,6 +677,9 @@ def main():
     if not root:
         print("Blocked: the brain guard could not find this brain.", file=sys.stderr)
         return 2
+    if data.get("hook_event_name") == "PostToolUse":
+        record_room_link(root, data)
+        return 0
     verdict, reason = decide(str(data.get("tool_name", "")), data.get("tool_input") or {}, root, load_brain(root), data.get("cwd"),
                              data.get("permission_mode"))
     if verdict == "allow":
