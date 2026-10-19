@@ -1,5 +1,10 @@
 {
   "outputStyle": "handoff",
+  "attribution": {
+    "commit": "",
+    "pr": "",
+    "sessionUrl": false
+  },
   "permissions": {
     "deny": [
       "WebFetch",
