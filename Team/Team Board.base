@@ -1,0 +1,31 @@
+filters:
+  and:
+    - file.inFolder("Team/Tasks")
+    - 'file.ext == "md"'
+    - 'file.basename != "README"'
+properties:
+  status:
+    displayName: Status
+  owner:
+    displayName: Who
+  title:
+    displayName: What
+views:
+  - type: table
+    name: "Needs you"
+    filters:
+      and:
+        - 'status == "Needs you"'
+    order:
+      - title
+      - owner
+      - why
+  - type: table
+    name: "Board"
+    groupBy:
+      property: status
+      direction: ASC
+    order:
+      - title
+      - owner
+      - status

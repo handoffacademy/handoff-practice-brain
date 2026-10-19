@@ -1,0 +1,36 @@
+{
+  "outputStyle": "handoff",
+  "permissions": {
+    "deny": [
+      "WebFetch",
+      "WebSearch",
+      "mcp__*send*",
+      "mcp__*reply*",
+      "mcp__*forward*",
+      "mcp__*trash*",
+      "mcp__*delete*",
+      "mcp__*spam*",
+      "mcp__*create_event*",
+      "mcp__*update_event*",
+      "mcp__*respond_to_event*",
+      "Edit(/**/CLAUDE.md)",
+      "Edit(/**/AGENTS.md)",
+      "Edit(/.claude/settings.json)",
+      "Edit(/.claude/output-styles/**)",
+      "Edit(/.handoff/**)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "d=\"${CLAUDE_PROJECT_DIR:-$PWD}\"; while [ \"$d\" != \"/\" ] && [ ! -f \"$d/.handoff/guard.py\" ]; do d=\"$(dirname \"$d\")\"; done; [ -f \"$d/.handoff/guard.py\" ] || { echo \"Blocked: the brain guard is missing.\" >&2; exit 2; }; python3 \"$d/.handoff/guard.py\" || exit 2"
+          }
+        ]
+      }
+    ]
+  }
+}
