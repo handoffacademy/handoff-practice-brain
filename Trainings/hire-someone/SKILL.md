@@ -12,7 +12,7 @@ description: Add a new helper to the team. Use when the owner asks for a new hel
    - `.claude/agents/<id>.md`: exactly the helper card below, with `<id>`, `<Name>` and `<role>` filled in and nothing else changed.
    Then write `Team/Memory/<Name>.md` with the line `# What <Name> has learned`.
 7. If the owner says no or denies a file, stop. Read back the job page and the helper card, tell the owner exactly which was saved and which was not (<Name> joins the team only once the helper card is saved), save, and leave the task note as `status: Needs you`.
-8. When everything is saved: save (morning-shift step 7), set the task note to `status: Done`, and tell the owner to start a new session to meet <Name>.
+8. When everything is saved: save (Saving in CLAUDE.md), set the task note to `status: Done`, and tell the owner to start a new session to meet <Name>.
 
 The helper card, exactly:
 ```

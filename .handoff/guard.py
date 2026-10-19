@@ -494,7 +494,7 @@ def decide(tool, inp, root, brain, cwd=None):
                 if problem:
                     return "deny", problem
             return "allow", ""
-        return "deny", "Blocked: the team cannot run programs here. To see what a folder holds, run ls on its own. The save steps in the morning-shift training run only exactly as written."
+        return "deny", "Blocked: the team cannot run programs here. To see what a folder holds, run ls on its own. The save commands under Saving in CLAUDE.md run only exactly as written."
     if tool in ("WebFetch", "WebSearch"):
         return "deny", "Blocked: the team stays offline here."
     return "deny", "Blocked: this kind of action waits for the owner."

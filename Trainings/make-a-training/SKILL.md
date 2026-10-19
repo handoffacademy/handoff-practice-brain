@@ -17,5 +17,5 @@ description: Turn a routine into a training the team follows the same way every 
    ```
    Nothing else goes in the top block, and the steps never use an exclamation mark right before a backtick.
 7. If the owner says yes, write that exact text with the Write tool, as a whole file, first to `Trainings/<name>/SKILL.md` (the copy the owner reads) and then to `.claude/skills/<name>/SKILL.md` (the copy the team uses). Claude asks the owner to approve each file.
-8. If the owner says no or denies a file, stop. Read back both places, tell the owner exactly which copy was saved and which was not (the training works only once the team's copy is saved), save, and leave the task note as `status: Needs you`.
-9. When both copies are saved: save (morning-shift step 7), set the task note to `status: Done`, use the training once, and show the owner the result.
+8. If the owner says no or denies a file, stop. Read back both places, tell the owner exactly which copy was saved and which was not (the training works only once the team's copy is saved), save (Saving in CLAUDE.md), and leave the task note as `status: Needs you`.
+9. When both copies are saved: save (Saving in CLAUDE.md), set the task note to `status: Done`, use the training once, and show the owner the result.
