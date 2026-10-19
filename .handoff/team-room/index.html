@@ -1,0 +1,583 @@
+<title>Team Room</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&display=swap">
+<style>
+/* Layout: a status strip, the office floor (the team at their desks, the water cooler, your desk), then "Needs you", then chat beside the task board (stacked on phones), then shifts. */
+:root {
+  --bg: #eef1f3;
+  --panel: #ffffff;
+  --ink: #10120e;
+  --muted: #50554b;
+  --line: #d5dad6;
+  --lime: #d7ff3f;
+  --sky: #88ceee;
+  --orange: #ff7900;
+  --on-lime: #10120e;
+  --font: "Satoshi", "Helvetica Neue", Arial, sans-serif;
+  --pixel: "VT323", "Courier New", monospace;
+  --radius: 12px;
+  /* The office floor's own palette. */
+  --floor-a: #e4e9ec; --floor-b: #dae0e4; --wall: #c3d3dc; --wall-trim: #10120e;
+  --desk-top: #d9ded9; --desk-front: #a7afa9; --metal: #3a4036; --rug: #cfe7f3;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #10120e; --panel: #1b1e18; --ink: #f5fafc; --muted: #b3b8ad; --line: #33382e;
+    --orange: #ff8a26; color-scheme: dark;
+    --floor-a: #1f231b; --floor-b: #1a1d17; --wall: #2b3427; --wall-trim: #050604;
+    --desk-top: #4a5244; --desk-front: #343a30; --metal: #11130f; --rug: #22323b;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #10120e; --panel: #1b1e18; --ink: #f5fafc; --muted: #b3b8ad; --line: #33382e;
+  --orange: #ff8a26; color-scheme: dark;
+  --floor-a: #1f231b; --floor-b: #1a1d17; --wall: #2b3427; --wall-trim: #050604;
+  --desk-top: #4a5244; --desk-front: #343a30; --metal: #11130f; --rug: #22323b;
+}
+body { background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 16px; line-height: 1.5; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-block: 20px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 28px; }
+h1, h2, h3 { margin: 0; text-wrap: balance; }
+h1 { font-size: clamp(1.6rem, 4vw, 2.2rem); line-height: 1.15; }
+h2 { font-size: 1.05rem; letter-spacing: 0.02em; text-transform: uppercase; color: var(--muted); }
+p { margin: 0; }
+header { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: baseline; justify-content: space-between; }
+.biz { color: var(--muted); font-size: 0.95rem; }
+.status { display: flex; align-items: center; gap: 8px; font-size: 0.95rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--ink); background: var(--lime); flex: none; }
+.status.resting .dot { background: var(--panel); }
+section { display: grid; gap: 12px; min-width: 0; }
+.office { background: #10120e; border-radius: var(--radius); padding: 6px; overflow-x: auto; }
+@media (max-width: 560px) { .office canvas { width: 600px; max-width: none; } .office::after { content: "Swipe to see the whole office"; display: block; color: #b3b8ad; font-size: 0.8rem; padding: 4px 2px 0; } }
+.office canvas { display: block; width: 100%; height: auto; aspect-ratio: 256 / 160; image-rendering: pixelated; border-radius: 8px; max-width: 100%; }
+.roster { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.roster li { display: flex; align-items: center; gap: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 3px 8px 3px 4px; font-size: 0.9rem; }
+.swatch { width: 12px; height: 12px; border: 1.5px solid var(--ink); border-radius: 3px; flex: none; }
+.chip { font-size: 0.78rem; font-weight: 700; border: 1.5px solid var(--ink); border-radius: 6px; padding: 0 6px; white-space: nowrap; }
+.chip.working { background: var(--sky); color: #10120e; border-color: #10120e; }
+.chip.needs-you { background: var(--orange); color: #10120e; border-color: #10120e; }
+.chip.done-today { background: var(--lime); color: #10120e; border-color: #10120e; }
+.chip.resting { background: transparent; color: var(--muted); border-color: var(--line); }
+.needs { background: var(--lime); color: var(--on-lime); border-radius: var(--radius); padding: 18px; display: grid; gap: 10px; }
+.needs h2 { color: var(--on-lime); }
+.needs ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+.needs li { display: grid; gap: 2px; padding-top: 10px; border-top: 1px solid rgb(16 18 14 / 0.25); }
+.needs li:first-child { border-top: 0; padding-top: 0; }
+.needs .t { font-weight: 700; }
+.needs .w { font-size: 0.95rem; }
+.cols { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 28px; align-items: start; }
+@media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
+.brief { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
+.brief ul, .chat, .shifts { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.brief li { padding-left: 14px; position: relative; overflow-wrap: anywhere; }
+.brief li::before { content: ""; position: absolute; left: 0; top: 0.65em; width: 6px; height: 6px; background: var(--ink); }
+.chat li { display: grid; gap: 2px; padding-block: 8px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.chat li:last-child { border-bottom: 0; }
+.chat .who { font-weight: 700; font-size: 0.92rem; }
+.chat .arrow { color: var(--muted); font-weight: 400; }
+.board { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 480px) { .board { grid-template-columns: 1fr; } }
+.lane { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.lane h3 { font-size: 0.95rem; display: flex; justify-content: space-between; gap: 8px; }
+.lane h3 .n { color: var(--muted); font-variant-numeric: tabular-nums; }
+.lane.needs-you { border: 2px solid var(--ink); }
+.task { display: grid; gap: 2px; padding-top: 8px; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.task .t { font-weight: 600; font-size: 0.95rem; }
+.task .meta { color: var(--muted); font-size: 0.85rem; }
+.shifts li { display: flex; flex-wrap: wrap; gap: 4px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 14px; }
+.shifts .k { font-weight: 700; }
+.shifts .d { color: var(--muted); font-variant-numeric: tabular-nums; }
+.shifts .s { flex-basis: 100%; overflow-wrap: anywhere; }
+.none, .empty { color: var(--muted); font-size: 0.95rem; }
+.needs .empty { color: var(--on-lime); font-weight: 600; }
+.note { color: var(--muted); font-size: 0.85rem; }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Team Room</h1>
+      <p class="biz" id="biz"></p>
+    </div>
+    <p class="status" id="status"><span class="dot" aria-hidden="true"></span><span id="status-text">Loading your team…</span></p>
+  </header>
+
+  <section aria-labelledby="floor-h">
+    <h2 id="floor-h">The office</h2>
+    <div class="office"><canvas id="floor" role="img" aria-label="The office floor"></canvas></div>
+    <ul class="roster" id="roster"></ul>
+  </section>
+
+  <section class="needs" aria-labelledby="needs-h">
+    <h2 id="needs-h">Needs you</h2>
+    <ul id="needs"></ul>
+  </section>
+
+  <div class="cols">
+    <div style="display:grid;gap:28px;min-width:0">
+      <section aria-labelledby="brief-h">
+        <h2 id="brief-h">Today's brief</h2>
+        <div class="brief"><ul id="brief"></ul></div>
+      </section>
+      <section aria-labelledby="chat-h">
+        <h2 id="chat-h">Team chat</h2>
+        <ul class="chat" id="chat"></ul>
+      </section>
+    </div>
+    <section aria-labelledby="board-h">
+      <h2 id="board-h">Tasks</h2>
+      <div class="board" id="board"></div>
+    </section>
+  </div>
+
+  <section aria-labelledby="shifts-h">
+    <h2 id="shifts-h">Shifts</h2>
+    <ul class="shifts" id="shifts"></ul>
+  </section>
+
+  <p class="note">This page updates by itself each time your team saves its work. Only you can see it unless you share it.</p>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  // Every piece of text comes from notes and emails, so it is only ever set
+  // with textContent or drawn on the canvas: nothing in it can run as code.
+  var MAX_TEXT = 300, MAX_LIST = 50;
+  function text(v) { return typeof v === "string" ? v.slice(0, MAX_TEXT) : ""; }
+  function list(v) { return Array.isArray(v) ? v.slice(0, MAX_LIST) : []; }
+  function el(tag, cls, content) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (content !== undefined) n.textContent = content;
+    return n;
+  }
+  function clear(id) { var n = document.getElementById(id); while (n.firstChild) n.removeChild(n.firstChild); return n; }
+  var STATES = { "working": "working", "needs you": "needs-you", "done today": "done-today", "resting": "resting" };
+  // Names and states come from notes, so lookups never reach built-in properties.
+  function own(o, k) { return Object.prototype.hasOwnProperty.call(o, k) ? o[k] : undefined; }
+  var LABEL = { "working": "Working", "needs-you": "Needs you", "done-today": "Done today", "resting": "Resting" };
+  var LANES = ["Needs you", "Working", "To do", "Done"];
+  var updatedAt = null;
+
+  // ---------- The office floor ----------
+  var W = 256, H = 160, AISLE = 86;
+  var SHIRTS = ["#d7ff3f", "#88ceee", "#ff7900", "#f5fafc", "#ffd23f", "#b9a4ff", "#7fe0b8", "#ff9fb2"];
+  var SKIN = ["#f1c27d", "#c68642", "#8d5524", "#e0ac69", "#ffdbac", "#a8724a"];
+  var HAIR = ["#10120e", "#5a3a22", "#d9a441", "#2b2b2b", "#8a4b2a", "#e6e1d6"];
+  var SLOTS = [[20, 48], [72, 48], [124, 48], [176, 48], [20, 100], [72, 100], [124, 100], [176, 100]];
+  var COOLER = { x: 232, y: 44 };
+  var COOLER_SPOTS = [{ x: 220, y: 58 }, { x: 238, y: 66 }, { x: 214, y: 70 }, { x: 228, y: 74 }];
+  var YOU = { x: 200, y: 128 };
+  var YOU_SPOT = { x: 194, y: 120 };
+  var SMALL_TALK = ["Coffee?", "Nice work today", "Quiet one", "Who took my mug?", "Back in five", "Water break"];
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  var canvas = document.getElementById("floor"), ctx = canvas.getContext("2d");
+  // When the team saves, the viewer swaps in the new page in place: only the
+  // newest copy of this script animates, and it redraws on whichever canvas is shown.
+  var GEN = (window.__teamRoomGen = (window.__teamRoomGen || 0) + 1);
+  function alive() { return window.__teamRoomGen === GEN; }
+  function liveCanvas() {
+    var c = document.getElementById("floor");
+    if (c && c !== canvas) { canvas = c; ctx = canvas.getContext("2d"); size(); }
+    return !!c;
+  }
+  var S = 3, colors = {}, people = [], handoffs = [], nextHandoff = 0, needsCount = 0, briefLine = "", last = 0, hi = 0;
+
+  function readColors() {
+    var cs = getComputedStyle(document.documentElement);
+    ["--floor-a", "--floor-b", "--wall", "--wall-trim", "--desk-top", "--desk-front", "--metal", "--rug", "--ink", "--lime", "--sky", "--orange"].forEach(function (k) {
+      colors[k] = cs.getPropertyValue(k).trim() || "#888";
+    });
+  }
+  function size() {
+    var w = canvas.getBoundingClientRect().width || 600;
+    var dpr = window.devicePixelRatio || 1;
+    S = Math.max(2, Math.round((w * dpr) / W));
+    canvas.width = W * S; canvas.height = H * S;
+    ctx.imageSmoothingEnabled = false;
+  }
+  function px(x, y, w, h, c) { ctx.fillStyle = c; ctx.fillRect(Math.round(x * S), Math.round(y * S), Math.round(w * S), Math.round(h * S)); }
+  function label(str, x, y, size, c, align) {
+    ctx.font = Math.round(size * S) + "px " + "VT323, 'Courier New', monospace";
+    ctx.textAlign = align || "center"; ctx.textBaseline = "top"; ctx.fillStyle = c;
+    ctx.fillText(str, Math.round(x * S), Math.round(y * S));
+  }
+  function fit(str, size, maxW) {
+    ctx.font = Math.round(size * S) + "px VT323, 'Courier New', monospace";
+    if (ctx.measureText(str).width <= maxW * S) return str;
+    while (str.length > 1 && ctx.measureText(str + "…").width > maxW * S) str = str.slice(0, -1);
+    return str + "…";
+  }
+  function bubble(str, x, y, accent) {
+    var t = fit(str, 7, 70);
+    ctx.font = Math.round(7 * S) + "px VT323, 'Courier New', monospace";
+    var w = Math.ceil(ctx.measureText(t).width / S) + 6, bx = Math.max(1, Math.min(W - w - 1, x - w / 2)), by = Math.max(1, y - 11);
+    px(bx - 1, by - 1, w + 2, 11, colors["--ink"]);
+    px(bx, by, w, 9, accent || "#ffffff");
+    px(x - 1, by + 9, 3, 2, colors["--ink"]); px(x, by + 9, 1, 1, accent || "#ffffff");
+    label(t, bx + w / 2, by + 0.5, 7, "#10120e");
+  }
+
+  function drawRoom(t) {
+    for (var ty = 28; ty < H; ty += 8) for (var tx = 0; tx < W; tx += 8) px(tx, ty, 8, 8, ((tx + ty) / 8) % 2 ? colors["--floor-a"] : colors["--floor-b"]);
+    px(14, AISLE - 3, 180, 16, colors["--rug"]); for (var rx = 18; rx < 190; rx += 12) px(rx, AISLE + 4, 6, 1, colors["--floor-b"]);
+    px(0, 0, W, 28, colors["--wall"]); px(0, 27, W, 2, colors["--wall-trim"]);
+    // Windows with a little sky.
+    [92, 150].forEach(function (wx) { px(wx, 5, 40, 16, colors["--wall-trim"]); px(wx + 1, 6, 38, 14, "#bfe6f6"); px(wx + 20, 6, 1, 14, colors["--wall-trim"]); px(wx + 4 + ((t / 400) % 30), 9, 7, 2, "#ffffff"); });
+    // Whiteboard with today's first brief line.
+    px(6, 4, 76, 20, colors["--wall-trim"]); px(7, 5, 74, 18, "#f5fafc");
+    label("TODAY", 44, 5, 7, "#ff7900");
+    label(fit(briefLine || "No brief yet", 6, 70), 44, 13, 6, "#10120e");
+    // Clock.
+    var now = new Date(), hh = String(now.getHours()).padStart(2, "0"), mm = String(now.getMinutes()).padStart(2, "0");
+    px(204, 7, 24, 12, colors["--wall-trim"]); px(205, 8, 22, 10, "#10120e"); label(hh + ":" + mm, 216, 8, 8, "#d7ff3f");
+    // Plant.
+    px(3, 70, 9, 8, "#8a5a3c"); px(1, 58, 4, 6, "#7fbf3f"); px(6, 54, 4, 10, "#9ad14a"); px(10, 59, 4, 6, "#7fbf3f"); px(4, 62, 8, 9, "#6aa834");
+    // Water cooler.
+    var bob = Math.sin(t / 300) > 0.95 ? 1 : 0;
+    px(COOLER.x, COOLER.y + 8, 12, 18, "#e9eef1"); px(COOLER.x, COOLER.y + 8, 12, 1, colors["--wall-trim"]);
+    px(COOLER.x + 2, COOLER.y - 4, 8, 12, "#88ceee"); px(COOLER.x + 3, COOLER.y - 3, 2, 8, "#c8ecfb");
+    px(COOLER.x + 4, COOLER.y + 14, 4, 2, "#3a4036"); px(COOLER.x + 5, COOLER.y + 4 - bob * 3, 1, 1, "#ffffff");
+    label("WATER", COOLER.x + 6, COOLER.y + 27, 6, colors["--ink"]);
+    // Your desk and inbox tray.
+    px(YOU.x, YOU.y, 52, 10, colors["--desk-top"]); px(YOU.x, YOU.y + 10, 52, 8, colors["--desk-front"]);
+    px(YOU.x + 34, YOU.y - 4, 14, 5, colors["--metal"]);
+    for (var i = 0; i < Math.min(needsCount, 6); i++) px(YOU.x + 35, YOU.y - 5 - i * 2, 12, 2, i % 2 ? "#ffffff" : "#f1facf");
+    label("YOU", YOU.x + 16, YOU.y + 10, 8, colors["--ink"] === "#10120e" ? "#10120e" : "#f5fafc");
+    if (needsCount > 0 && Math.floor(t / 500) % 2) { px(YOU.x + 39, YOU.y - 22, 4, 9, "#ff7900"); px(YOU.x + 39, YOU.y - 11, 4, 3, "#ff7900"); }
+  }
+
+  function drawDesk(p, t) {
+    var dx = p.desk[0], dy = p.desk[1];
+    var working = p.state === "working" && p.mode === "sit";
+    // Monitor back and its glow.
+    // Chair back behind the seat.
+    px(dx + 5, dy + 3, 10, 9, colors["--desk-front"]); px(dx + 5, dy + 3, 10, 1, colors["--metal"]);
+  }
+  function drawDeskFront(p) {
+    var dx = p.desk[0], dy = p.desk[1];
+    px(dx, dy + 12, 30, 8, colors["--desk-top"]); px(dx, dy + 20, 30, 7, colors["--desk-front"]);
+    // Monitor on the right of the desk, screen facing the seat.
+    var working = p.state === "working" && p.mode === "sit";
+    if (working) px(dx + 15, dy + 1, 15, 13, "rgba(136,206,238," + (0.3 + 0.15 * Math.sin(performance.now() / 200)) + ")");
+    px(dx + 17, dy + 3, 11, 9, colors["--metal"]); px(dx + 22, dy + 12, 2, 2, colors["--metal"]);
+    px(dx + 18, dy + 4, 2, 7, working ? "#88ceee" : "#5a6155");
+    if (working) { var ln = Math.floor(performance.now() / 300) % 3; px(dx + 21, dy + 5 + ln * 2, 5, 1, "#88ceee"); }
+    px(dx + 3, dy + 14, 8, 3, "#ffffff"); // papers
+    if (p.state === "done today") { px(dx + 22, dy + 13, 4, 4, "#ffffff"); px(dx + 26, dy + 14, 1, 2, "#ffffff"); }
+    if (p.flash > 0) px(dx + 12, dy + 13, 6, 4, "#d7ff3f");
+    label(fit(p.name, 7, 34), dx + 15, dy + 28, 7, colors["--ink"] === "#10120e" ? "#10120e" : "#f5fafc");
+  }
+  function drawPerson(p, t) {
+    var x = Math.round(p.x), y = Math.round(p.y), walking = p.mode === "walk", seated = p.mode === "sit";
+    var step = walking ? Math.floor(t / 140) % 2 : 0, ink = "#10120e";
+    // Legs (hidden behind the desk when seated).
+    if (!seated) { px(x + 1, y + 11, 2, 3 - step, "#2d3350"); px(x + 5, y + 11, 2, 2 + step, "#2d3350"); px(x + 1, y + 13 - step, 2, 1, ink); px(x + 5, y + 13, 2, 1, ink); }
+    // Body.
+    px(x, y + 6, 8, 5, p.shirt); px(x, y + 6, 8, 1, ink);
+    if (p.chief) px(x + 3, y + 7, 2, 4, "#ff7900");
+    // Arms: typing at the desk, swinging when walking.
+    var a = seated && p.state === "working" ? Math.floor(t / 120) % 2 : step;
+    px(x - 1, y + 7 + a, 1, 3, p.shirt); px(x + 8, y + 8 - a, 1, 3, p.shirt);
+    // Head.
+    px(x + 1, y + 1, 6, 5, p.skin); px(x + 1, y, 6, 2, p.hair); px(x, y + 1, 1, 3, p.hair);
+    px(x + 2, y + 3, 1, 1, ink); px(x + 5, y + 3, 1, 1, ink);
+    if (p.state === "done today" && seated) px(x + 3, y + 5, 2, 1, ink);
+    // Paper being carried.
+    if (p.carrying) { px(x + 7, y + 7, 5, 6, ink); px(x + 8, y + 8, 3, 4, "#ffffff"); }
+    // Mug at the cooler.
+    if (p.mug) { px(x + 8, y + 8, 3, 3, "#f5fafc"); px(x + 8, y + 8, 3, 1, ink); }
+  }
+
+  function seatOf(p) { return { x: p.desk[0] + 6, y: p.desk[1] }; }
+  function accessOf(pt, p) { return pt.access || pt; }
+  function route(p, to) {
+    var from = { x: p.x, y: p.y };
+    var a = p.atSeat ? { x: p.desk[0] - 8, y: p.desk[1] } : from;
+    var b = to.access || to;
+    return [a, { x: a.x, y: AISLE }, { x: b.x, y: AISLE }, b, to].filter(function (q, i, arr) { return i === 0 || q.x !== arr[i - 1].x || q.y !== arr[i - 1].y; });
+  }
+  function homeSeat(p) { var s = seatOf(p); s.access = { x: p.desk[0] - 8, y: p.desk[1] }; return s; }
+  function walkTo(p, to) { route(p, to).forEach(function (q) { p.plan.push({ k: "walk", to: q }); }); }
+
+  function basePlan(p) {
+    var st = p.state, i = p.i;
+    if (st === "resting") {
+      var spot = COOLER_SPOTS[i % COOLER_SPOTS.length];
+      if (Math.abs(p.x - spot.x) > 1 || Math.abs(p.y - spot.y) > 1) walkTo(p, spot);
+      p.plan.push({ k: "wait", ms: 3000 + (i * 900) % 4000, say: Math.random() < 0.5 ? SMALL_TALK[(i + Math.floor(Math.random() * 6)) % SMALL_TALK.length] : "", mug: true });
+    } else if (st === "needs you") {
+      if (!p.atSeat) { walkTo(p, homeSeat(p)); p.plan.push({ k: "sit" }); }
+      p.plan.push({ k: "wait", ms: 2500 });
+      p.plan.push({ k: "carry", on: true });
+      walkTo(p, YOU_SPOT);
+      p.plan.push({ k: "wait", ms: 3500, say: "Needs you!", accent: "#ff7900" });
+      p.plan.push({ k: "carry", on: false });
+      walkTo(p, homeSeat(p)); p.plan.push({ k: "sit" });
+    } else if (st === "done today") {
+      if (!p.atSeat) { walkTo(p, homeSeat(p)); p.plan.push({ k: "sit" }); }
+      p.plan.push({ k: "wait", ms: 6000 + (i * 1300) % 5000 });
+      walkTo(p, COOLER_SPOTS[i % COOLER_SPOTS.length]);
+      p.plan.push({ k: "wait", ms: 2500, say: "Done for today", mug: true });
+      walkTo(p, homeSeat(p)); p.plan.push({ k: "sit" });
+    } else {
+      if (!p.atSeat) { walkTo(p, homeSeat(p)); p.plan.push({ k: "sit" }); }
+      p.plan.push({ k: "wait", ms: 5000 });
+    }
+  }
+
+  function startHandoff(h) {
+    var from = people.filter(function (p) { return p.name === h.from; })[0];
+    var to = people.filter(function (p) { return p.name === h.to; })[0];
+    if (!from || !to || from === to) return false;
+    from.plan = []; from.mug = false;
+    from.plan.push({ k: "carry", on: true });
+    walkTo(from, { x: to.desk[0] - 8, y: to.desk[1] });
+    from.plan.push({ k: "wait", ms: 2600, say: h.text });
+    from.plan.push({ k: "give", to: to });
+    walkTo(from, homeSeat(from)); from.plan.push({ k: "sit" });
+    return true;
+  }
+
+  function step(p, dt) {
+    if (p.flash > 0) p.flash -= dt;
+    if (p.sayUntil && performance.now() > p.sayUntil) p.say = "";
+    if (!p.plan.length) basePlan(p);
+    var act = p.plan[0];
+    if (!act) return;
+    if (act.k === "walk") {
+      p.mode = "walk"; p.atSeat = false;
+      var dx = act.to.x - p.x, dy = act.to.y - p.y, d = Math.sqrt(dx * dx + dy * dy), v = 0.03 * dt;
+      if (d <= v) { p.x = act.to.x; p.y = act.to.y; p.plan.shift(); } else { p.x += dx / d * v; p.y += dy / d * v; }
+    } else if (act.k === "wait") {
+      if (!act.started) { act.started = performance.now(); p.mode = p.atSeat ? "sit" : "stand"; if (act.say) { p.say = act.say; p.accent = act.accent || ""; p.sayUntil = act.started + act.ms; } p.mug = !!act.mug; }
+      if (performance.now() - act.started >= act.ms) { p.plan.shift(); p.mug = false; }
+    } else if (act.k === "sit") {
+      var s = seatOf(p); p.x = s.x; p.y = s.y; p.mode = "sit"; p.atSeat = true; p.plan.shift();
+    } else if (act.k === "carry") {
+      p.carrying = act.on; p.plan.shift();
+    } else if (act.k === "give") {
+      p.carrying = false; act.to.flash = 1600; act.to.say = "On it!"; act.to.accent = "#d7ff3f"; act.to.sayUntil = performance.now() + 1600; p.plan.shift();
+    }
+  }
+
+  function frame(now) {
+    if (window.__teamRoomGen !== GEN) return;
+    if (!liveCanvas()) { setTimeout(function () { frame(performance.now()); }, 250); return; }
+    var dt = Math.min(64, now - (last || now)); last = now;
+    {
+      if (!reduce) {
+        people.forEach(function (p) { step(p, dt); });
+        if (handoffs.length && now > nextHandoff) {
+          var tries = handoffs.length;
+          while (tries-- && !startHandoff(handoffs[hi % handoffs.length])) hi++;
+          hi++; nextHandoff = now + 9000;
+        }
+      }
+      draw(now);
+    }
+    if (!reduce) setTimeout(function () { frame(performance.now()); }, 40);
+  }
+  function draw(t) {
+    if (!colors["--ink"]) readColors();
+    drawRoom(t);
+    // Back row first, so the front row stands in front.
+    var order = people.slice().sort(function (a, b) { return a.y - b.y; });
+    people.forEach(function (p) { drawDesk(p, t); });
+    order.forEach(function (p) { if (p.mode === "sit") drawPerson(p, t); });
+    people.forEach(function (p) { drawDeskFront(p); });
+    order.forEach(function (p) { if (p.mode !== "sit") drawPerson(p, t); });
+    people.forEach(function (p) { if (p.say) bubble(p.say, p.x + 4, p.y - 1, p.accent || "#ffffff"); });
+    if (!people.length) label("Your team will show up here after its first update.", W / 2, 70, 8, colors["--ink"] === "#10120e" ? "#10120e" : "#f5fafc");
+  }
+
+  function setOffice(helpers, chat, tasks, brief) {
+    var names = Object.create(null);
+    var prev = Object.create(null);
+    people.forEach(function (p) { prev[p.name] = p; });
+    people = helpers.slice(0, 8).map(function (h, i) {
+      var name = text(h.name) || "Helper";
+      var st = own(STATES, text(h.state).toLowerCase()) ? text(h.state).toLowerCase() : "resting";
+      var old = prev[name];
+      var p = {
+        i: i, name: name, state: st, desk: SLOTS[i], shirt: SHIRTS[i % SHIRTS.length], skin: SKIN[(i * 5 + 1) % SKIN.length],
+        hair: HAIR[(i * 3 + 2) % HAIR.length], chief: i === 0 && /chief/i.test(name + text(h.role)),
+        plan: [], mode: "sit", atSeat: true, carrying: false, mug: false, say: "", flash: 0
+      };
+      var s = seatOf(p);
+      p.x = old ? old.x : s.x; p.y = old ? old.y : s.y;
+      if (old) { p.mode = old.mode; p.atSeat = old.atSeat; }
+      if (reduce) {
+        var spot = st === "resting" ? COOLER_SPOTS[i % COOLER_SPOTS.length] : (st === "needs you" ? YOU_SPOT : null);
+        if (spot) { p.x = spot.x; p.y = spot.y; p.mode = "stand"; p.atSeat = false; p.mug = st === "resting"; p.carrying = st === "needs you"; }
+        if (st === "needs you") { p.say = "Needs you!"; p.accent = "#ff7900"; }
+      }
+      names[name] = true;
+      return p;
+    });
+    handoffs = chat.filter(function (m) { return names[text(m.from)] && names[text(m.to)]; }).slice(0, 6).map(function (m) {
+      return { from: text(m.from), to: text(m.to), text: text(m.text) };
+    });
+    needsCount = tasks.filter(function (t) { return text(t.status) === "Needs you"; }).length;
+    briefLine = brief[0] || "";
+    nextHandoff = performance.now() + 1500;
+    canvas.setAttribute("aria-label", people.length
+      ? "The office floor: " + people.map(function (p) { return p.name + " is " + p.state; }).join(", ") + (needsCount ? ". " + needsCount + " things wait on your desk." : ".")
+      : "The office floor, empty until the team's first update.");
+    draw(performance.now());
+  }
+
+  // ---------- The lists ----------
+  function ago(ms) {
+    var m = Math.round(ms / 60000);
+    if (m < 1) return "just now";
+    if (m < 60) return m + (m === 1 ? " minute ago" : " minutes ago");
+    var h = Math.round(m / 60);
+    if (h < 24) return h + (h === 1 ? " hour ago" : " hours ago");
+    var d = Math.round(h / 24);
+    return d + (d === 1 ? " day ago" : " days ago");
+  }
+  var dateOnly = false;
+  function tickStatus() {
+    var box = document.getElementById("status"), t = document.getElementById("status-text");
+    if (!alive() || !updatedAt) return;
+    if (dateOnly) {
+      // The team may know only the date: compare calendar days, not hours.
+      var today = new Date(), d = updatedAt;
+      var same = d.getUTCFullYear() === today.getFullYear() && d.getUTCMonth() === today.getMonth() && d.getUTCDate() === today.getDate();
+      box.classList.toggle("resting", !same);
+      t.textContent = same ? "Updated today" : "The team is resting. Last update " + d.toLocaleDateString(undefined, { timeZone: "UTC" });
+      return;
+    }
+    var age = Date.now() - updatedAt.getTime(), resting = age > 2 * 3600 * 1000;
+    box.classList.toggle("resting", resting);
+    t.textContent = (resting ? "The team is resting. Last update " : "Updated ") + ago(Math.max(0, age));
+    box.title = updatedAt.toLocaleString();
+  }
+
+  function render(d) {
+    document.getElementById("biz").textContent = text(d.business);
+    dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(text(d.updated));
+    var u = new Date(text(d.updated));
+    updatedAt = isNaN(u.getTime()) ? null : u;
+    if (!updatedAt) document.getElementById("status-text").textContent = "No update time yet";
+    tickStatus();
+
+    var tasks = list(d.tasks).filter(function (t) { return t && typeof t === "object"; });
+    var helpers = list(d.helpers).filter(function (h) { return h && typeof h === "object"; });
+    var chatItems = list(d.chat).filter(function (m) { return m && typeof m === "object" && text(m.text); });
+    var b = list(d.brief).map(text).filter(Boolean);
+    setOffice(helpers, chatItems, tasks, b);
+
+    var roster = clear("roster");
+    helpers.slice(0, 8).forEach(function (h, i) {
+      var st = own(STATES, text(h.state).toLowerCase()) || "resting";
+      var li = el("li");
+      var sw = el("span", "swatch"); sw.style.background = SHIRTS[i % SHIRTS.length]; li.appendChild(sw);
+      li.appendChild(el("span", "", text(h.name)));
+      li.appendChild(el("span", "chip " + st, LABEL[st]));
+      roster.appendChild(li);
+    });
+
+    var needs = tasks.filter(function (t) { return text(t.status) === "Needs you"; });
+    var nList = clear("needs");
+    if (!needs.length) nList.appendChild(el("li", "empty", "Nothing needs you right now."));
+    needs.forEach(function (t) {
+      var li = el("li");
+      li.appendChild(el("span", "t", text(t.title)));
+      var why = text(t.why);
+      if (why) li.appendChild(el("span", "w", why));
+      nList.appendChild(li);
+    });
+
+    var brief = clear("brief");
+    if (!b.length) brief.appendChild(el("li", "none", "No brief yet today."));
+    b.forEach(function (line) { brief.appendChild(el("li", "", line)); });
+
+    var chat = clear("chat");
+    if (!chatItems.length) chat.appendChild(el("li", "none", "No chat yet today."));
+    chatItems.forEach(function (m) {
+      var li = el("li");
+      var who = el("span", "who", text(m.from) || "Team");
+      var to = text(m.to);
+      if (to) { who.appendChild(el("span", "arrow", " → ")); who.appendChild(document.createTextNode(to)); }
+      li.appendChild(who);
+      li.appendChild(el("span", "", text(m.text)));
+      chat.appendChild(li);
+    });
+
+    var board = clear("board");
+    LANES.forEach(function (lane) {
+      var items = tasks.filter(function (t) { return text(t.status) === lane; });
+      var box = el("div", "lane" + (lane === "Needs you" ? " needs-you" : ""));
+      var h = el("h3");
+      h.appendChild(el("span", "", lane === "Done" ? "Done today" : lane));
+      h.appendChild(el("span", "n", String(items.length)));
+      box.appendChild(h);
+      if (!items.length) box.appendChild(el("p", "none", "None"));
+      items.forEach(function (t) {
+        var row = el("div", "task");
+        row.appendChild(el("span", "t", text(t.title)));
+        var meta = [text(t.owner), text(t.date)].filter(Boolean).join(" · ");
+        if (meta) row.appendChild(el("span", "meta", meta));
+        box.appendChild(row);
+      });
+      board.appendChild(box);
+    });
+
+    var shifts = clear("shifts");
+    var s = list(d.shifts).filter(function (x) { return x && typeof x === "object"; });
+    if (!s.length) shifts.appendChild(el("li", "none", "No shifts yet. The morning shift shows up here after it runs."));
+    s.forEach(function (x) {
+      var li = el("li");
+      li.appendChild(el("span", "k", text(x.kind)));
+      li.appendChild(el("span", "d", text(x.date)));
+      var sum = text(x.summary);
+      if (sum) li.appendChild(el("span", "s", sum));
+      shifts.appendChild(li);
+    });
+  }
+
+  function empty(msg) {
+    document.getElementById("status-text").textContent = msg;
+    clear("needs").appendChild(el("li", "empty", "Nothing yet."));
+    clear("brief").appendChild(el("li", "none", "No brief yet."));
+    clear("chat").appendChild(el("li", "none", "No chat yet. In a session, say \"Update my Team Room\"."));
+    clear("shifts").appendChild(el("li", "none", "No shifts yet."));
+    clear("board"); clear("roster");
+    setOffice([], [], [], []);
+  }
+
+  function load() {
+    if (!alive()) return;
+    fetch("room.json", { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
+      .then(function (d) { if (!alive()) return; if (!d || typeof d !== "object" || Array.isArray(d)) throw new Error("shape"); render(d); })
+      .catch(function () { if (alive() && !updatedAt) empty("Waiting for your team's first update"); });
+  }
+
+  size(); readColors();
+  function onResize() { if (!alive()) { window.removeEventListener("resize", onResize); return; } size(); if (reduce) draw(performance.now()); }
+  window.addEventListener("resize", onResize);
+  if (window.matchMedia) {
+    var mq = window.matchMedia("(prefers-color-scheme: dark)");
+    var onTheme = function () { if (!alive()) { if (mq.removeEventListener) mq.removeEventListener("change", onTheme); return; } readColors(); if (reduce) draw(performance.now()); };
+    if (mq.addEventListener) mq.addEventListener("change", onTheme);
+  }
+  var themeWatch = new MutationObserver(function () { if (!alive()) { themeWatch.disconnect(); return; } readColors(); if (reduce) draw(performance.now()); });
+  themeWatch.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  if (document.fonts && document.fonts.load) document.fonts.load("16px VT323").then(function () { if (alive() && reduce) draw(performance.now()); }, function () {});
+  load();
+  if (!reduce) frame(performance.now());
+  var timers = [setInterval(tickStatus, 30000), setInterval(load, 120000)];
+  var reaper = setInterval(function () {
+    if (alive()) return;
+    timers.concat(reaper).forEach(clearInterval);
+    window.removeEventListener("resize", onResize);
+    if (mq && mq.removeEventListener) mq.removeEventListener("change", onTheme);
+    themeWatch.disconnect();
+  }, 5000);
+})();
+</script>

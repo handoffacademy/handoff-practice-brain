@@ -9,3 +9,4 @@ description: Run the weekday morning shift: brief, inbox, handoffs. Use when a s
 5. File anything new in `Drop Zone/` into the right Business notes and log it.
 6. Add chat lines as you go. When the helpers are done, rewrite the brief so it says what is done and what waits for the owner. Never write job pages, helper cards or trainings in a shift; if one should change, write a Needs-you task note instead.
 7. Save with the steps under Saving in `CLAUDE.md`, with the message "Morning shift <today>". Pushing to `main` is the step that counts.
+8. If `Team/Room/link.md` exists, update the Team Room: steps 2 to 4 of the team-room training. If that fails, say so in one line; the work is still saved.
