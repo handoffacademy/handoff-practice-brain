@@ -39,13 +39,17 @@ SERVICES = {
     "calendar": {"list_events", "get_event", "search_events", "list_calendars", "suggest_time"},
     "notion": {"notion-search", "notion-fetch"},
     # Microsoft 365 (Outlook mail and calendar). Tool names are from Anthropic's
-    # connector security guide (support.claude.com/en/articles/12684923). Only
-    # search, read and plain draft tools are listed. The reply-draft tools stay
+    # connector security guide (support.claude.com/en/articles/12684923), checked
+    # against a live scheduled task on 2026-10-20: it exposed outlook_email_search,
+    # outlook_calendar_search, outlook_create_draft, outlook_update_draft and
+    # outlook_find_available_time (the guide calls the last one
+    # find_meeting_availability, so both spellings are listed). Only search, read
+    # and plain draft tools are listed. The reply-draft tools stay
     # out (the settings deny every tool with "reply" in its name), and so does
     # every send, forward, delete, label, rule, auto-reply, event, file and
     # Teams tool.
-    "m365": {"outlook_email_search", "outlook_calendar_search", "find_meeting_availability", "read_resource",
-             "outlook_create_draft", "outlook_update_draft"},
+    "m365": {"outlook_email_search", "outlook_calendar_search", "outlook_find_available_time", "find_meeting_availability",
+             "read_resource", "outlook_create_draft", "outlook_update_draft"},
 }
 # On a cloud shift a connection is named after its app (a scheduled task names
 # Gmail's tools mcp__Gmail__...); the owner chose which apps the shift gets
@@ -53,10 +57,10 @@ SERVICES = {
 CLOUD_NAMES = {"claude_ai_Gmail": "gmail", "claude_ai_Google_Calendar": "calendar", "claude_ai_Notion": "notion",
                "claude_ai_Microsoft_365": "m365",
                "Gmail": "gmail", "Google_Calendar": "calendar", "Notion": "notion",
-               # A scheduled task's connection list names it Microsoft_365 (read from the
-               # account's routines API on 2026-10-20). Its tool names come from the
-               # support guide and are UNVERIFIED live. If a shift names the server
-               # differently, the owner maps it in brain.json "connections".
+               # A scheduled task names it Microsoft_365 (routines API and a live run,
+               # 2026-10-20: tools were mcp__Microsoft_365__outlook_email_search and so on).
+               # If a shift names the server differently, the owner maps it in
+               # brain.json "connections".
                "Microsoft_365": "m365"}
 WORKING_DIRS = ("business/", "how we work/", "decisions/", "projects/", "team/tasks/", "team/chat/", "team/memory/")
 # Files an AI tool loads as instructions when it works in their folder
