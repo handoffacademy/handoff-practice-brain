@@ -38,7 +38,7 @@ SERVICES = {
               "create_draft", "update_draft"},
     "calendar": {"list_events", "get_event", "search_events", "list_calendars", "suggest_time"},
     "notion": {"notion-search", "notion-fetch"},
-    # Microsoft 365 (Outlook mail and calendar). Tool names are from Anthropic's
+    # Microsoft 365. Tool names are from Anthropic's
     # connector security guide (support.claude.com/en/articles/12684923), checked
     # against a live scheduled task on 2026-10-20: it exposed outlook_email_search,
     # outlook_calendar_search, outlook_create_draft, outlook_update_draft and
@@ -46,10 +46,14 @@ SERVICES = {
     # find_meeting_availability, so both spellings are listed). Only search, read
     # and plain draft tools are listed. The reply-draft tools stay
     # out (the settings deny every tool with "reply" in its name), and so does
-    # every send, forward, delete, label, rule, auto-reply, event, file and
-    # Teams tool.
+    # every send, forward, delete, label, rule, auto-reply, calendar-write and
+    # Teams tool. File reads below also require the separate fileAccess opt-in.
     "m365": {"outlook_email_search", "outlook_calendar_search", "outlook_find_available_time", "find_meeting_availability",
-             "read_resource", "outlook_create_draft", "outlook_update_draft"},
+             "read_resource", "outlook_create_draft", "outlook_update_draft",
+             "sharepoint_search", "sharepoint_folder_search"},
+    # Live Google Drive catalog and schema discovery, 2026-10-20. Only these
+    # three reads are needed; downloads, uploads, sharing and edits stay closed.
+    "drive": {"search_files", "read_file_content", "get_file_metadata"},
 }
 # On a cloud shift a connection is named after its app (a scheduled task names
 # Gmail's tools mcp__Gmail__...); the owner chose which apps the shift gets
@@ -61,7 +65,7 @@ CLOUD_NAMES = {"claude_ai_Gmail": "gmail", "claude_ai_Google_Calendar": "calenda
                # 2026-10-20: tools were mcp__Microsoft_365__outlook_email_search and so on).
                # If a shift names the server differently, the owner maps it in
                # brain.json "connections".
-               "Microsoft_365": "m365"}
+               "Microsoft_365": "m365", "Google_Drive": "drive", "claude_ai_Google_Drive": "drive"}
 WORKING_DIRS = ("business/", "how we work/", "decisions/", "projects/", "team/tasks/", "team/chat/", "team/memory/")
 # Files an AI tool loads as instructions when it works in their folder
 # (Claude Code loads a subfolder's CLAUDE.md on its own). An employee who
@@ -123,7 +127,8 @@ JOB_PAGE = re.compile(r"Team/([A-Za-z0-9][A-Za-z0-9 -]{0,40})\.md")
 HELPER_CARD = re.compile(r"\.claude/agents/([a-z0-9][a-z0-9-]{0,40})\.md")
 TRAINING = re.compile(r"(?:\.claude/skills|Trainings)/([a-z0-9][a-z0-9-]{0,40})/SKILL\.md")
 BUILT_IN_TRAININGS = {"about-my-business", "catch-me-up", "morning-shift", "friday-review", "tidy-the-brain",
-                      "make-a-training", "hire-someone", "set-me-up", "team-room"}
+                      "make-a-training", "hire-someone", "set-me-up", "team-room",
+                      "connect-business-files", "use-business-files"}
 HELPER_NAME = r"[A-Za-z0-9][A-Za-z0-9 -]{0,40}"
 HELPER_ROLE = r"[a-z0-9][a-z0-9 ,'-]{0,59}"
 # A training's top block holds only its name and a one-line description, with
@@ -186,12 +191,75 @@ def service_of(server, brain):
     return CLOUD_NAMES.get(server)
 
 
-def mcp_allowed(tool, brain):
+def microsoft_resource_allowed(inp, files_enabled):
+    """read_resource also reaches Teams and other data. Permit only reviewed
+    mail/calendar URI shapes, plus file reads after the owner's separate opt-in.
+    Schemes/inputs from live schema discovery on 2026-10-20. Fail closed on
+    unknown schemas rather than treating this generic tool as an all-access read.
+    """
+    if not isinstance(inp, dict) or set(inp) - {"uri", "startPage", "endPage"}:
+        return False
+    uri = inp.get("uri")
+    if not isinstance(uri, str) or any(invisible(c) or c.isspace() for c in uri):
+        return False
+    try:
+        parsed = urllib.parse.urlsplit(uri)
+        path = urllib.parse.unquote(parsed.path, errors="strict")
+    except (ValueError, UnicodeError):
+        return False
+    if parsed.netloc or parsed.fragment or "\\" in path or any(invisible(c) for c in path):
+        return False
+    # Reject alternate spellings, traversal and nested percent encoding.
+    if not uri.startswith(parsed.scheme + ":///") or "%" in path:
+        return False
+    parts = path.split("/")[1:]
+    if not parts or any(p in ("", ".", "..") for p in parts):
+        return False
+    pages = [inp[k] for k in ("startPage", "endPage") if k in inp]
+    if any(type(n) is not int or not 1 <= n <= 100000 for n in pages):
+        return False
+    if inp.get("endPage", 100000) < inp.get("startPage", 1):
+        return False
+    if parsed.scheme == "file":
+        return files_enabled and len(parts) >= 2 and not parsed.query
+    if pages:
+        return False
+    if parsed.scheme == "drive":
+        return files_enabled and len(parts) == 2 and parts[0] in ("users", "groups", "sites") and not parsed.query
+    if parsed.scheme == "mail":
+        shape = len(parts) == 2 and parts[0] in ("messages", "folders")
+    elif parsed.scheme == "calendar":
+        shape = len(parts) == 2 and parts[0] == "events"
+    else:
+        return False
+    if not shape:
+        return False
+    # Shared mailbox owner is part of the documented read schema. Never let
+    # another query flag alter the kind of resource requested.
+    if parsed.query:
+        query = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
+        return set(query) == {"owner"} and len(query["owner"]) == 1 and bool(query["owner"][0])
+    return True
+
+
+def mcp_allowed(tool, brain, inp=None):
     m = re.fullmatch(r"mcp__(.+?)__(.+)", tool)
     if not m:
         return False
     service = service_of(m.group(1), brain)
-    return bool(service) and m.group(2) in SERVICES[service]
+    if not service or m.group(2) not in SERVICES[service]:
+        return False
+    access = brain.get("fileAccess")
+    access = access if isinstance(access, dict) else {}
+    if service == "drive":
+        return access.get("googleDrive") is True
+    if service == "m365":
+        enabled = access.get("microsoftFiles") is True
+        if m.group(2) in ("sharepoint_search", "sharepoint_folder_search"):
+            return enabled
+        if m.group(2) == "read_resource":
+            return microsoft_resource_allowed(inp, enabled)
+    return True
 
 
 def relative(root, path):
@@ -866,14 +934,41 @@ def decide(tool, inp, root, brain, cwd=None, mode=None, agent_type=None):
         if brain.get("practice"):
             return "deny", ("Blocked: this is a practice brain, so it never opens real email or other connections. "
                             "Use the notes and the practice inbox in the Drop Zone.")
-        if mcp_allowed(tool, brain):
+        if mcp_allowed(tool, brain, inp):
             if web_helper(root, agent_type):
-                return "deny", "Blocked: a helper who searches the web does not read email or the calendar. Ask the Chief to pass on what it needs."
+                return "deny", "Blocked: a helper who searches the web does not read business connections. Ask the Chief to pass on what it needs."
             return "allow", ""
         return "deny", "Blocked: on a shift your team only reads and writes drafts. Write a draft or a Needs-you task instead."
     if tool in WRITE:
         path = inp.get("file_path") or inp.get("notebook_path")
+        # The only assistant-written change to the brain marker is this exact
+        # two-switch opt-in, with every other field preserved and a human click.
+        marker = os.path.join(root, MARKER)
+        if path == marker and os.path.realpath(marker) == marker:
+            if brain.get("practice") or tool != "Write" or mode not in APPROVAL_MODES:
+                return "deny", "Blocked: file connections are a choice for the owner in a real brain. Choose Accept edits and ask to connect business files. Practice stays offline."
+            try:
+                updated = json.loads(inp.get("content", ""))
+            except (TypeError, ValueError):
+                updated = None
+            access = updated.get("fileAccess") if isinstance(updated, dict) else None
+            if (not isinstance(access, dict) or set(access) != {"googleDrive", "microsoftFiles"}
+                    or any(type(v) is not bool for v in access.values())
+                    or {k: v for k, v in updated.items() if k != "fileAccess"}
+                    != {k: v for k, v in brain.items() if k != "fileAccess"}):
+                return "deny", "Blocked: this choice changes only the two business-file switches. Everything else must stay the same."
+            choices = ", ".join(f"{name}: {'on' if access[key] else 'off'}" for key, name in
+                                (("googleDrive", "Google Drive"), ("microsoftFiles", "SharePoint and OneDrive")))
+            return "ask", f"Business file reads — {choices}. This lets your assistant search and read files your connected account can access. It cannot edit or share them. Approve only the connections you want."
         if write_allowed(root, path):
+            # External documents can conflict with the owner's approved terms.
+            # Even a persuaded assistant cannot silently rewrite these files.
+            business_terms = ("business/offers.md", "business/about the business.md")
+            if any(relative(root, candidate).casefold() in business_terms
+                   for candidate in (path, os.path.realpath(path))):
+                if mode not in APPROVAL_MODES:
+                    return "deny", "Blocked: prices and business rules need your approval. Save the proposed change in a Needs-you task. In a live session, choose Accept edits before changing these notes."
+                return "ask", "This changes your business's approved prices or rules. Check every change before allowing it. A connected document is not approval."
             return "allow", ""
         room = room_write(root, tool, path, inp)
         if room:

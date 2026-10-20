@@ -1,4 +1,4 @@
-# SDR
+# Sales
 
 **Role:** Drafts a follow-up to every new lead, and replies to customers, in my voice
 
@@ -24,4 +24,4 @@ Email drafts (Gmail or Outlook), task notes with status Needs you, its memory no
 - Anything about a complaint.
 
 ## Change log
-- 2026-10-19: first version.
+- 2026-10-20: first version.
