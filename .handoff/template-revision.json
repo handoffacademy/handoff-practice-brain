@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "revision": "9dcababa42718afdfd78fa070bb2767926b7c55f83e9f7c2b370e92de8b93517",
+  "sources": {
+    "make_brain.py": "ddcb8067e9f7093a83cb412c20d8463887c21e702003ac0f678e4ef6bd148ab6",
+    "guard.py": "163dec096c5db29fb55b4cc38b037dc638a5a1e96da1b5bd7788e793d047ed12",
+    "connected_files.py": "a819d699ac69cc49c45b23a660146be12d3788bbd4971b8c2452985c10b05c0a",
+    "team-room.html": "68da78fc58c80a8fc45d8c2de0d6dfbbe554dd5d83cf40adb2ca60c6caf4d958"
+  },
+  "scope": "Optional business-file reads; no external edits, sending, publishing or calendar changes"
+}

@@ -1,6 +1,10 @@
 {
-  "version": 1,
+  "version": 2,
   "name": "Sunny Days Cleaning (practice)",
   "backupRemote": "",
+  "fileAccess": {
+    "googleDrive": false,
+    "microsoftFiles": false
+  },
   "practice": true
 }
