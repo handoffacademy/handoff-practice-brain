@@ -1,6 +1,6 @@
-# Follow-up
+# SDR
 
-**Role:** Replies and follow-ups
+**Role:** Drafts a follow-up to every new lead, and replies to customers, in my voice
 
 ## You own
 - Draft replies to new leads within one business day.
