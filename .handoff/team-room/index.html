@@ -172,7 +172,7 @@ section { display: grid; gap: 12px; min-width: 0; }
   var S = 3, colors = {}, people = [], handoffs = [], nextHandoff = 0, needsCount = 0, briefLine = "", last = 0;
   // Movement means real work: someone types only while a task or helper is working in a fresh update,
   // and each new update plays its handoffs and deliveries once, then the office settles.
-  var hasWorking = false, stale = false, lastSig = null;
+  var hasWorking = false, stale = false, lastSig = null, wasBusy = false;
   function busy() { return hasWorking && !stale; }
   function typing(p) { return busy() && p.state === "working" && p.mode === "sit"; }
 
@@ -293,6 +293,14 @@ section { display: grid; gap: 12px; min-width: 0; }
   function walkTo(p, to) { route(p, to).forEach(function (q) { p.plan.push({ k: "walk", to: q }); }); }
 
   function basePlan(p) {
+    // Nobody working: everyone is simply in their place, still.
+    if (!busy()) {
+      var place = p.state === "resting" ? COOLER_SPOTS[p.i % COOLER_SPOTS.length] : seatOf(p);
+      p.x = place.x; p.y = place.y; p.atSeat = p.state !== "resting"; p.mode = p.atSeat ? "sit" : "stand";
+      p.carrying = false;
+      p.plan.push({ k: "wait", ms: 60000, mug: p.state === "resting" });
+      return;
+    }
     // Settled: nobody walks unless an update just arrived.
     if (p.state === "resting") {
       var spot = COOLER_SPOTS[p.i % COOLER_SPOTS.length];
@@ -361,6 +369,17 @@ section { display: grid; gap: 12px; min-width: 0; }
     var dt = Math.min(64, now - (last || now)); last = now;
     {
       if (!reduce) {
+        if (wasBusy && !busy()) lastSig = null; // the next working update always counts as new
+        wasBusy = busy();
+        if (!busy()) {
+          // Nobody working: whatever was under way stops, and everyone settles in place.
+          handoffs = [];
+          people.forEach(function (p) {
+            if (p.events || p.mode === "walk" || p.carrying || p.say || p.flash > 0) {
+              p.plan = []; p.events = 0; p.carrying = false; p.say = ""; p.flash = 0;
+            }
+          });
+        }
         people.forEach(function (p) { step(p, dt); });
         if (handoffs.length && now > nextHandoff) {
           while (handoffs.length && !startHandoff(handoffs.shift())) {}
@@ -393,7 +412,10 @@ section { display: grid; gap: 12px; min-width: 0; }
   }
   function setOffice(helpers, chat, tasks, brief) {
     // The page checks for news every two minutes; the same data leaves everyone and their queued walks alone.
-    var sig = JSON.stringify([helpers, chat, tasks]);
+    hasWorking = tasks.some(function (t) { return text(t.status) === "Working"; }) ||
+      helpers.some(function (h) { return text(h.state).toLowerCase() === "working"; });
+    // Working or not is part of what is new: a fresh copy of the same notes still plays once.
+    var sig = JSON.stringify([helpers, chat, tasks, busy()]);
     if (sig === lastSig) { briefLine = brief[0] || ""; describe(); draw(performance.now()); return; }
     lastSig = sig;
     var names = Object.create(null);
@@ -421,15 +443,17 @@ section { display: grid; gap: 12px; min-width: 0; }
       return p;
     });
     needsCount = tasks.filter(function (t) { return text(t.status) === "Needs you"; }).length;
-    hasWorking = tasks.some(function (t) { return text(t.status) === "Working"; }) ||
-      helpers.some(function (h) { return text(h.state).toLowerCase() === "working"; });
     briefLine = brief[0] || "";
-    // Play an update once: its handoffs (oldest first) and one trip to your desk per helper who needs you.
-    handoffs = chat.filter(function (m) { return names[text(m.from)] && names[text(m.to)]; }).slice(0, 6).reverse().map(function (m) {
-      return { from: text(m.from), to: text(m.to), text: text(m.text) };
-    });
-    nextHandoff = performance.now() + 1500;
-    if (!reduce) people.filter(function (p) { return p.state === "needs you"; }).forEach(function (p, n) { deliver(p, 1000 + n * 2500); });
+    // While the team is working, play the new update once: its handoffs (oldest first) and one
+    // trip to your desk per helper who needs you. When nobody is working, nobody moves.
+    handoffs = [];
+    if (!reduce && busy()) {
+      handoffs = chat.filter(function (m) { return names[text(m.from)] && names[text(m.to)]; }).slice(0, 6).reverse().map(function (m) {
+        return { from: text(m.from), to: text(m.to), text: text(m.text) };
+      });
+      nextHandoff = performance.now() + 1500;
+      people.filter(function (p) { return p.state === "needs you"; }).forEach(function (p, n) { deliver(p, 1000 + n * 2500); });
+    }
     describe();
     draw(performance.now());
   }
