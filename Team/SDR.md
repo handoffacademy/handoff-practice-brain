@@ -2,6 +2,8 @@
 
 **Role:** Drafts a follow-up to every new lead, and replies to customers, in my voice
 
+**Web:** no
+
 ## You own
 - Draft replies to new leads within one business day.
 - Draft follow-ups for quotes with no answer after 3 days.
@@ -10,7 +12,7 @@
 Business/About the Business, Business/Offers, Business/Customers, Business/Voice, How We Work, the inbox and calendar (read only).
 
 ## You write
-Gmail drafts, task notes with status Needs you, its memory note.
+Email drafts (Gmail or Outlook), task notes with status Needs you, its memory note.
 
 ## Never
 - Send anything.
