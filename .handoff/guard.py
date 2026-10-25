@@ -641,6 +641,23 @@ def helper_name(root, agent_type):
     return who[0] if who else None
 
 
+def hired_helper(root, agent_type):
+    """The name of a helper the owner hired: its card in its one exact form and its
+    job page in its one place, in plain text, starting with its name. A card with
+    no job page is no hire: the helper would work without the owner's limits."""
+    name = helper_name(root, agent_type)
+    if not name:
+        return None
+    rel = "Team/%s.md" % name
+    path = os.path.join(root, rel)
+    if not JOB_PAGE.fullmatch(rel) or not exact_file(root, path, rel) or not os.path.isfile(path):
+        return None
+    text = read_small(path)
+    if text is None or not plain_text(text) or not text.startswith("# %s\n" % name):
+        return None
+    return name
+
+
 def job_page_allows_web(root, name):
     """The helper's own job page, in its one place, has the line the owner approved."""
     rel = "Team/%s.md" % name
@@ -891,10 +908,10 @@ def decide(tool, inp, root, brain, cwd=None, mode=None, agent_type=None):
         gate = room_handoff_gate(root)
         if gate:
             return gate
-        # Work goes only to a hired helper, whose card in its one exact form says
-        # it follows the brain's rules. Built-in or unknown helpers do not read them.
+        # Work goes only to a hired helper (card and job page): it follows the brain's
+        # rules and the owner's limits. Built-in or unknown helpers do not read them.
         target = inp.get("subagent_type") if isinstance(inp, dict) else None
-        if helper_name(root, target) is None:
+        if hired_helper(root, target) is None:
             return "deny", ("Blocked: work goes only to a helper on your team, one the owner hired. "
                             "Do it yourself under the rules, or ask the owner to hire someone.")
     if tool in SAFE:
