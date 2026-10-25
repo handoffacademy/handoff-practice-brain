@@ -643,8 +643,9 @@ def helper_name(root, agent_type):
 
 def hired_helper(root, agent_type):
     """The name of a helper the owner hired: its card in its one exact form and its
-    job page in its one place, in plain text, starting with its name. A card with
-    no job page is no hire: the helper would work without the owner's limits."""
+    job page in its one place, in plain text, starting with its name, with its Role
+    and Web lines. A card without such a page is no hire: the helper would work
+    without the owner's limits."""
     name = helper_name(root, agent_type)
     if not name:
         return None
@@ -654,6 +655,9 @@ def hired_helper(root, agent_type):
         return None
     text = read_small(path)
     if text is None or not plain_text(text) or not text.startswith("# %s\n" % name):
+        return None
+    # The two lines the hire-someone training always writes: what it does, and the web answer.
+    if not re.search(r"^\*\*Role:\*\* \S", text, re.M) or not re.search(r"^\*\*Web:\*\* (yes|no)$", text, re.M):
         return None
     return name
 
