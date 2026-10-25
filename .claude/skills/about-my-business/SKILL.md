@@ -1,6 +1,6 @@
 ---
 name: about-my-business
-description: Interview the owner about the business and fill in the Business notes. Use when the owner says "Start the About My Business interview" or wants to tell the team about the business.
+description: Interviews the owner about the business and fills in the Business notes. Use when the owner says "Start the About My Business interview" or wants to tell the team about the business.
 ---
 1. Tell the owner: eight short questions, one at a time, and they can answer in their own words or say "skip".
 2. Ask one question, wait for the answer, write it into the right note, then ask the next:

@@ -891,6 +891,12 @@ def decide(tool, inp, root, brain, cwd=None, mode=None, agent_type=None):
         gate = room_handoff_gate(root)
         if gate:
             return gate
+        # Work goes only to a hired helper, whose card in its one exact form says
+        # it follows the brain's rules. Built-in or unknown helpers do not read them.
+        target = inp.get("subagent_type") if isinstance(inp, dict) else None
+        if helper_name(root, target) is None:
+            return "deny", ("Blocked: work goes only to a helper on your team, one the owner hired. "
+                            "Do it yourself under the rules, or ask the owner to hire someone.")
     if tool in SAFE:
         return "allow", ""
     if tool == "Artifact":

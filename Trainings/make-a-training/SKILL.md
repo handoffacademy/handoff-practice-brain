@@ -1,6 +1,6 @@
 ---
 name: make-a-training
-description: Turn a routine into a training the team follows the same way every time. Use only when the owner asks for a training by that word; a procedure is a How We Work note instead.
+description: Turns a routine into a training the team follows the same way every time. Use only when the owner asks for a training by that word, such as "Make a training from the quote follow-up". A procedure is a How We Work note instead.
 ---
 1. Only when the owner asked for this in this session. Never in a shift.
 2. Ask the owner which routine, or read the `How We Work/` note they name.

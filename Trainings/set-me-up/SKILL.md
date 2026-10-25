@@ -1,6 +1,6 @@
 ---
 name: set-me-up
-description: Walk a new owner through setting up their AI team, one step at a time. Use when the owner says "Set me up", is new, or asks how to start.
+description: Walks a new owner through setting up the AI team, one step at a time. Use when the owner says "Set me up", is new, or asks how to start.
 ---
 1. Say, in two short lines: you are their Chief of Staff, and you will set up the team in four short steps, one at a time.
 2. Step 1 of 4, connections. If `Drop Zone/Inbox (practice).md` exists, this is a practice brain: say it uses made-up emails and never opens real ones. Tell the owner: click the + next to the message box, choose Connectors, turn every connection off, then say "done". Add that the switches stay that way in later sessions, so for their real brain they turn their email and calendar connections back on. Wait, then go to step 3. Otherwise try one email read and one calendar read, with the connection the owner has (Gmail and Google Calendar, or Microsoft 365). If either is missing, tell the owner: click the + next to the message box, choose Connectors, turn on only the email and calendar connection they use (Gmail and Google Calendar, or Microsoft 365), leave every other connection off, then say "done". Wait, then check again. Microsoft 365 needs a work account that the company's Microsoft administrator has approved once, and drafts need the administrator's write permission; without it the team still reads, and writes each draft as a Needs-you note instead.

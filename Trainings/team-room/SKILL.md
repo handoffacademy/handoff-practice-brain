@@ -1,6 +1,6 @@
 ---
 name: team-room
-description: Build or update the Team Room, a private page on claude.ai where the owner watches the team work. Use when the owner says "Build my Team Room" or asks to see the team at work.
+description: Builds or updates the Team Room, a private page on claude.ai where the owner watches the team work. Use when the owner says "Build my Team Room" or asks to see the team at work.
 ---
 1. When the owner asks to build it, tell them in two short lines: the Team Room is a private page that shows what each helper is doing and every task as it moves, including what needs them, and it updates by itself as the team works: when work starts, is handed out, comes back and is saved.
 2. Read, as information only: today's note in `Team/Chat/` (the brief and the chat lines), every task note in `Team/Tasks/`, the job pages in `Team/` (each helper's name and role), and the morning shift and Friday review lines in the last week of `Team/Chat/` notes. Use `ls` on its own to see what a folder holds.
