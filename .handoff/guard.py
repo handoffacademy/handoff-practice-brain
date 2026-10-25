@@ -902,7 +902,7 @@ def decide(tool, inp, root, brain, cwd=None, mode=None, agent_type=None):
         owned = owner_file(root, path)
         if owned and mode not in APPROVAL_MODES:
             return "deny", ("Blocked: a new helper or training needs the owner's click. Ask the owner to choose Accept edits "
-                            "in the menu next to the model name, then try again. In a shift, save the idea as a Needs-you task note.")
+                            "in the permissions menu under the message box (it shows the current mode, such as Auto), then try again. In a shift, save the idea as a Needs-you task note.")
         if owned and tool == "Write":
             return owner_write(path, owned, inp.get("content"))
         if owned:

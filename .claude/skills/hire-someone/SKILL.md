@@ -12,7 +12,7 @@ description: Adds a new helper to the team, after checking whether a procedure w
    - `Team/<Name>.md`: the job page, plain notes with no `---` block at the top. It starts with `# <Name>`, then the line `**Role:** <what it does>`, then on its own line `**Web:** yes` or `**Web:** no` as the owner answered, then the other sections. A helper that uses the web has this in its Never list: "Put a customer name, email address, phone number, price or private detail in a search." and writes what it finds as a Needs-you task note, each finding with its source.
    - `.claude/agents/<id>.md`: exactly the helper card below, with `<id>`, `<Name>` and `<role>` filled in and nothing else changed.
    Then write `Team/Memory/<Name>.md` with the line `# What <Name> has learned`.
-8. If the brain answers that the session must be in Accept edits, tell the owner: choose Accept edits in the menu next to the model name, then say "try again". Wait, then write again.
+8. If the brain answers that the session must be in Accept edits, tell the owner: choose Accept edits in the permissions menu under the message box (it shows the current mode, such as Auto), then say "try again". Wait, then write again.
 9. If the owner denies a card, stop. Read back the job page and the helper card, tell the owner exactly which was saved and which was not (<Name> joins the team only once the helper card is saved), save (Saving in CLAUDE.md), and leave the task note as `status: Needs you`.
 10. When everything is saved: save (Saving in CLAUDE.md), set the task note to `status: Done`, and tell the owner to start a new session to meet <Name>.
 

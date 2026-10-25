@@ -11,8 +11,8 @@ description: Walks a new owner through setting up the AI team, one step at a tim
    2. Name it "Morning shift". In the instructions box, type: Run the morning-shift training.
    3. Under Trigger, keep Schedule, choose Weekdays and an early morning time.
    4. Open Advanced settings. On General, set Repository to this brain's cloud copy, and only this one.
-   5. Now, next to the model name, choose Sonnet, which uses less of your plan. Choosing the cloud copy switches the model back, so this comes after it.
-   6. On Connectors, remove every connector except your email and calendar connection (Gmail and Google Calendar, or Microsoft 365) with the x next to each. In a practice brain, remove them all.
+   5. Now, in the model menu under the instructions box (it says Default model), choose Sonnet, which uses less of your plan. Choosing the cloud copy can switch the model back, so this comes after it.
+   6. On Connectors, remove every connector except your email and calendar connection (Gmail and Google Calendar, or Microsoft 365). In a practice brain, remove them all.
    7. Check the model still says Sonnet, then choose Create, then Run now.
 6. Finish in four lines: the team is set up; the morning brief appears in the team chat each weekday; next time, start a session and say "Catch me up"; say "Hire someone" when you want a helper, for example an SDR that drafts replies to leads, a CMO that drafts your posts, or a Researcher that looks into prospects and suppliers. If `Team/` holds no job page except `Chief.md`, add that you are the whole team so far, the Chief.
 7. Never change job pages, helper cards or trainings during setup.

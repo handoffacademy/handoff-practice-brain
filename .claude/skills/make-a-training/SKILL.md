@@ -17,6 +17,6 @@ description: Turns a routine into a training the team follows the same way every
    ```
    Nothing else goes in the top block, and the steps never use an exclamation mark right before a backtick.
 7. If the owner says yes, tell them in two lines: an approval card will appear for each of the two copies; check that it is what they asked for, then choose Allow once. Then write that exact text with the Write tool, as a whole file, first to `Trainings/<name>/SKILL.md` (the copy the owner reads) and then to `.claude/skills/<name>/SKILL.md` (the copy the team uses).
-8. If the brain answers that the session must be in Accept edits, tell the owner: choose Accept edits in the menu next to the model name, then say "try again". Wait, then write again.
+8. If the brain answers that the session must be in Accept edits, tell the owner: choose Accept edits in the permissions menu under the message box (it shows the current mode, such as Auto), then say "try again". Wait, then write again.
 9. If the owner denies a card, stop. Read back both places, tell the owner exactly which copy was saved and which was not (the training works only once the team's copy is saved), save (Saving in CLAUDE.md), and leave the task note as `status: Needs you`.
 10. When both copies are saved: save (Saving in CLAUDE.md), set the task note to `status: Done`, use the training once, and show the owner the result.
