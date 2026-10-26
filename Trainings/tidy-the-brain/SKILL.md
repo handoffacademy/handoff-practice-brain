@@ -1,6 +1,6 @@
 ---
 name: tidy-the-brain
-description: Health check of the brain. Use in the Friday review or when the owner asks to tidy up.
+description: Checks the notes for facts that disagree, missing notes and broken links, and fixes what is safe. Use in the Friday review or when the owner asks to tidy up.
 ---
 1. Look for: facts in two notes that disagree, facts a newer note replaced, notes nothing links to, things mentioned often that have no note of their own, and broken links.
 2. Fix what is safe (links, index lines, a note for a missing topic). For disagreements, keep both facts and add a Needs-you task asking the owner which is right.
