@@ -461,10 +461,15 @@ def task_head(data):
 
 
 def yaml_uncomment(line):
-    """The line without a YAML comment: a # at the start or after a space or tab, outside quotes."""
-    quote = None
+    """The line without a YAML comment: a # at the start or after a space or tab, outside quotes
+    (a backslash inside double quotes escapes the next character)."""
+    quote, skip = None, False
     for i, ch in enumerate(line):
-        if quote:
+        if skip:
+            skip = False
+        elif quote == '"' and ch == "\\":
+            skip = True
+        elif quote:
             if ch == quote:
                 quote = None
         elif ch in ("'", '"'):
@@ -474,32 +479,65 @@ def yaml_uncomment(line):
     return line.rstrip()
 
 
+def plain_status(first, more):
+    """('working' | 'idle' | 'unreadable') for a status property: `first` is the text after
+    `status:` on its line, `more` the lines that belong to its value. Only a single value on that
+    one line is read: plain, or wholly in single or double quotes with no escape. Anything else
+    (a value spread over lines, a list, a flow collection, an anchor, alias, tag, block scalar,
+    escape or a further `: `) is not read and counts as unreadable."""
+    if any(yaml_uncomment(l).strip() for l in more):
+        return "unreadable"
+    v = yaml_uncomment(first).strip()
+    if not v:
+        return "idle"
+    if v[0] in "\"'":
+        q = v[0]
+        if len(v) < 2 or v[-1] != q:
+            return "unreadable"
+        inner = v[1:-1]
+        if q == '"' and ("\\" in inner or '"' in inner):
+            return "unreadable"
+        if q == "'":
+            if "'" in inner.replace("''", ""):
+                return "unreadable"
+            inner = inner.replace("''", "'")
+        v = inner
+    elif (v[0] in "[]{}&*!|>%@`\\" or re.match(r"[-?:](\s|$)", v) or ": " in v or v.endswith(":")):
+        return "unreadable"
+    return "working" if re.match(r"\s*working\b", v, re.I) else "idle"
+
+
+LINE_BREAKS = ("\x85", "\u2028", "\u2029")
+
+
 def task_working(text):
-    """(busy, title) for a task note's head (task_head). The top block opens with `---` on the
-    first line and closes at the next `---` in the first column; one that does not close within
-    the head counts as busy. Comments are removed first, quote-aware, as YAML removes them. Each
-    top-level property (a line in the first column) takes as its value the indented lines, the
-    unindented `- item` lines and the comment lines after it, so a `---` or a `status:` inside
-    another property's value never counts. Busy when `status` (any letter case, key quoted or not)
-    holds Working in any spelling a YAML reader would take as Working (quoted, bracketed, a list
-    item, a block value, a value on the next lines). Also busy when a form this check does not
-    resolve appears: an indented first property, a top-level line opening with a YAML indicator
-    or a merge, an escaped key, or a status value that is or holds an anchor, alias, tag, flow
-    mapping, directive or escape. A note that cannot be read plainly counts as still working."""
+    """(busy, title, why) for a task note's head (task_head). The top block opens with `---` on
+    the first line and closes at the next `---` in the first column. Each top-level property (a
+    line in the first column) takes the indented lines, unindented `- item` lines and comment lines
+    after it as its value, so a `---` or a `status:` inside another property's value never counts.
+    A `status` property (any letter case, key quoted or not) is read by plain_status. `why` is
+    "working" when a status says Working, "unreadable" when the note's top block or a status in it
+    is not one this check reads (an unclosed top block, a line break YAML readers disagree on, an
+    indented first property, a top-level line opening with a YAML indicator or merge, an escaped
+    key, a status that is not one plain value on its line), else "". Busy means either."""
+    if any(c in text for c in LINE_BREAKS):
+        head = text.split("\n---", 1)[0]
+        if any(c in head for c in LINE_BREAKS):
+            return True, "", "unreadable"
     lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     if not lines or lines[0].rstrip() != "---":
-        return False, ""
+        return False, "", ""
     block = []
     for line in lines[1:]:
         if line.rstrip() == "---":
             break
         block.append(line)
     else:
-        return True, ""
+        return True, "", "unreadable"
     def continues(line):
         return (not line.strip() or line[:1] in (" ", "\t") or re.match(r"-(\s|$)", line) is not None
                 or line.lstrip().startswith("#"))
-    title, busy, seen_property = "", False, False
+    title, why, seen_property = "", "", False
     i = 0
     while i < len(block):
         line = block[i]
@@ -509,37 +547,26 @@ def task_working(text):
         if not line.strip() or line.lstrip().startswith("#"):
             i += 1
             continue
-        if line[:1] in (" ", "\t") or (not seen_property and re.match(r"-(\s|$)", line)):
-            # A first property that is indented (or a list where a property belongs) is not read here.
-            if not seen_property:
-                busy = True
+        if not seen_property and (line[:1] in (" ", "\t") or re.match(r"-(\s|$)", line)):
+            why = why or "unreadable"
             i = j
             continue
         seen_property = True
         if line[:1] in "?&*!{[|>%@`" or line.startswith("<<") or re.match(r"""\s*"[^"]*\\""", line):
-            busy = True
+            why = why or "unreadable"
         m = re.match(r"""["']?(status|title)["']?\s*:(.*)$""", line, re.I)
-        if m:
-            inline = yaml_uncomment(m.group(2)).strip()
-            if re.fullmatch(r"[|>][0-9+-]*", inline):
-                inline = ""
-            rest = [yaml_uncomment(l).strip() for l in block[i + 1:j]]
-            value = " ".join([inline] + [r for r in rest if r]).strip()
-            raw = m.group(2) + "\n" + "\n".join(block[i + 1:j])
-            if m.group(1).lower() == "status":
-                # Working read plainly; a list or flow entry holding it; an anchor, alias, tag or other
-                # indicator at the start of the value, a list item or a flow entry; a flow mapping; and
-                # any backslash at all (an escape this check does not decode, comments included).
-                entries = re.split(r"""[\[\],]|(?:^|\s)-(?=\s|$)""", value) if value[:1] in "[-" else [value]
-                if (any(re.match(r"""["'\s]*working\b""", e, re.I) for e in entries)
-                        or re.search(r"""(^|[\[,{]|-\s)\s*[*&!%@`]""", value)
-                        or "{" in value or "\\" in raw
-                        or inline.count("[") > inline.count("]")):
-                    busy = True
-            elif value.strip("\"' "):
-                title = value.strip("\"' ")
+        if m and m.group(1).lower() == "status":
+            state = plain_status(m.group(2), block[i + 1:j])
+            if state == "working":
+                why = "working"
+            elif state == "unreadable":
+                why = why or "unreadable"
+        elif m:
+            value = yaml_uncomment(m.group(2)).strip().strip("\"' ")
+            if value:
+                title = value
         i = j
-    return busy, title
+    return bool(why), title, why
 
 
 def task_dirs(root):
@@ -559,13 +586,14 @@ def task_dirs(root):
 
 
 def helper_still_working(root):
-    """A label for the first task note (task_dirs) that a helper still has (rule 6 in CLAUDE.md),
-    or None. A note that cannot be read counts as still working."""
+    """(label, why) for the first task note (task_dirs) that a helper still has (rule 6 in
+    CLAUDE.md) or whose status this check cannot read plainly, or None. A note that cannot be
+    opened counts as unreadable."""
     for top, _real in task_dirs(root):
         try:
             names = sorted(os.listdir(top))
         except OSError:
-            return os.path.basename(top)[:80] or "a task note"
+            return (os.path.basename(top)[:80] or "a task note"), "unreadable"
         for n in names:
             p = os.path.join(top, n)
             if not n.lower().endswith(".md") or not os.path.isfile(p):
@@ -574,10 +602,10 @@ def helper_still_working(root):
                 with open(p, "rb") as f:
                     head = task_head(f.read(TASK_HEAD))
             except OSError:
-                return n[:-3][:80]
-            busy, title = task_working(head)
+                return n[:-3][:80], "unreadable"
+            busy, title, why = task_working(head)
             if busy:
-                return (title or n[:-3])[:80]
+                return (title or n[:-3])[:80], why
     return None
 
 
@@ -1237,10 +1265,13 @@ def decide(tool, inp, root, brain, cwd=None, mode=None, agent_type=None):
                 return "deny", "Blocked: the save steps run only from the brain folder itself."
             # A helper's draft is saved only after the assistant's check: no save while a helper still works.
             busy = helper_still_working(root) if " commit " in cmd else None
-            if busy:
+            if busy and busy[1] == "working":
                 return "deny", ("Blocked: a helper is still working on \"%s\". Wait for its report and run the draft check "
                                 "on its draft, then save. If no helper is working on it any more, set that task to "
-                                "Needs you first." % busy)
+                                "Needs you first." % busy[0])
+            if busy:
+                return "deny", ("Blocked: the task note \"%s\" has a status this brain cannot read plainly, so the save waits. "
+                                "Write its status on one line, such as status: Needs you, then save." % busy[0])
             if " commit " in cmd and not index_matches_notes(root):
                 return "deny", ("Blocked: the notes changed after the first save step. Run the save steps again from "
                                 "step 1, so the save holds exactly what was checked.")
