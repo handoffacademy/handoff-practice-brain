@@ -521,6 +521,7 @@ def task_working(text):
     first line, a line break YAML readers disagree on or a byte order mark inside the top block,
     an indented first property, a top-level line opening with a YAML indicator or merge, an
     escaped key, a status that is not one plain value on its line), else "". Busy means either."""
+    cut = len(text.encode("utf-8", "replace")) >= TASK_HEAD - 6  # measured before CRLF becomes LF
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     lines = text.split("\n")
     # YAML readers skip blank, comment and directive lines before a top block, end a line at
@@ -528,19 +529,22 @@ def task_working(text):
     # block opening any way but a plain `---` first line is read here as they would read it, and
     # any status it could hold counts as one this check does not read. Delimiters are compared
     # after removing spaces and tabs only (Python's plain rstrip also removes LINE_BREAKS).
-    # A head holding only such lines up to the read limit may have its top block further on.
+    # A U+FEFF (byte order mark) is skipped like a space while looking. A head reaching the read
+    # limit with only such lines, or ending in the line where the looking stops, may have its top
+    # block further on.
     scan = re.split("[\n" + "".join(LINE_BREAKS) + "]", text)
     k = 0
-    while k < len(scan) and (not scan[k].strip(" \t") or scan[k].lstrip(" \t")[:1] in ("#", "%")):
+    while k < len(scan) and (not scan[k].strip(" \t\ufeff") or scan[k].lstrip(" \t\ufeff")[:1] in ("#", "%")):
         k += 1
-    if k == len(scan):
-        cut = len(text.encode("utf-8", "replace")) >= TASK_HEAD - 6
+    if k == len(scan) or (cut and k == len(scan) - 1):
+        # Nothing but such lines, or a last line the read limit may have cut (a `---` split in two).
         return cut, "", "unreadable" if cut else ""
-    if not re.match(r"---([ \t]|$)", scan[k]):
+    opening = scan[k].lstrip("\ufeff")
+    if not re.match(r"---([ \t]|$)", opening):
         return False, "", ""
     if k or lines[0].rstrip(" \t") != "---":
-        rest = scan[k][3:].strip(" \t")
-        if (rest and not rest.startswith("#")) or any(c in text for c in LINE_BREAKS):
+        rest = opening[3:].strip(" \t")
+        if (rest and not rest.startswith("#")) or any(c in text for c in LINE_BREAKS + ("\ufeff",)):
             return True, "", "unreadable"
         busy, title, why = task_working("\n".join(["---"] + lines[k + 1:]))
         return busy, title, "unreadable" if busy else ""
