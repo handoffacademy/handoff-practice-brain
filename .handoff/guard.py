@@ -520,10 +520,6 @@ def task_working(text):
     is not one this check reads (an unclosed top block, a line break YAML readers disagree on, an
     indented first property, a top-level line opening with a YAML indicator or merge, an escaped
     key, a status that is not one plain value on its line), else "". Busy means either."""
-    if any(c in text for c in LINE_BREAKS):
-        head = text.split("\n---", 1)[0]
-        if any(c in head for c in LINE_BREAKS):
-            return True, "", "unreadable"
     lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     if not lines or lines[0].rstrip() != "---":
         return False, "", ""
@@ -533,6 +529,10 @@ def task_working(text):
             break
         block.append(line)
     else:
+        return True, "", "unreadable"
+    # Some YAML readers end a line at these characters and others do not, so a top block holding
+    # one cannot be read the same way by everyone. Only the top block counts; the body never does.
+    if any(c in line for line in block for c in LINE_BREAKS):
         return True, "", "unreadable"
     def continues(line):
         return (not line.strip() or line[:1] in (" ", "\t") or re.match(r"-(\s|$)", line) is not None
