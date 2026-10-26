@@ -460,16 +460,32 @@ def task_head(data):
     return text[1:] if text.startswith("\ufeff") else text
 
 
+def yaml_uncomment(line):
+    """The line without a YAML comment: a # at the start or after a space or tab, outside quotes."""
+    quote = None
+    for i, ch in enumerate(line):
+        if quote:
+            if ch == quote:
+                quote = None
+        elif ch in ("'", '"'):
+            quote = ch
+        elif ch == "#" and (i == 0 or line[i - 1] in " \t"):
+            return line[:i].rstrip()
+    return line.rstrip()
+
+
 def task_working(text):
     """(busy, title) for a task note's head (task_head). The top block opens with `---` on the
     first line and closes at the next `---` in the first column; one that does not close within
-    the head counts as busy. Each top-level property (a line in the first column) takes its
-    indented lines after it as part of its value, so a `---` or a `status:` inside another
-    property's value never counts. Busy when `status` (any letter case, key quoted or not) holds
-    Working in any spelling a YAML reader would take as Working (quoted, bracketed, a block value,
-    a value on the next lines), and also when its value, or any top-level line, uses a form this
-    check does not read (an anchor, alias, tag, flow collection, merge, complex key or escape):
-    a note that cannot be read plainly counts as still working. Body text never counts."""
+    the head counts as busy. Comments are removed first, quote-aware, as YAML removes them. Each
+    top-level property (a line in the first column) takes as its value the indented lines, the
+    unindented `- item` lines and the comment lines after it, so a `---` or a `status:` inside
+    another property's value never counts. Busy when `status` (any letter case, key quoted or not)
+    holds Working in any spelling a YAML reader would take as Working (quoted, bracketed, a list
+    item, a block value, a value on the next lines). Also busy when a form this check does not
+    resolve appears: an indented first property, a top-level line opening with a YAML indicator
+    or a merge, an escaped key, or a status value that is or holds an anchor, alias, tag, flow
+    mapping, directive or escape. A note that cannot be read plainly counts as still working."""
     lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     if not lines or lines[0].rstrip() != "---":
         return False, ""
@@ -480,26 +496,40 @@ def task_working(text):
         block.append(line)
     else:
         return True, ""
-    title, busy = "", False
+    def continues(line):
+        return (not line.strip() or line[:1] in (" ", "\t") or re.match(r"-(\s|$)", line) is not None
+                or line.lstrip().startswith("#"))
+    title, busy, seen_property = "", False, False
     i = 0
     while i < len(block):
         line = block[i]
         j = i + 1
-        while j < len(block) and (not block[j].strip() or block[j][:1] in (" ", "\t") or re.match(r"-(\s|$)", block[j])):
+        while j < len(block) and continues(block[j]):
             j += 1
-        if not line.strip() or line[:1] in (" ", "\t", "#"):
-            i = j if line.strip() and line[:1] in (" ", "\t") else i + 1
+        if not line.strip() or line.lstrip().startswith("#"):
+            i += 1
             continue
+        if line[:1] in (" ", "\t") or (not seen_property and re.match(r"-(\s|$)", line)):
+            # A first property that is indented (or a list where a property belongs) is not read here.
+            if not seen_property:
+                busy = True
+            i = j
+            continue
+        seen_property = True
         if line[:1] in "?&*!{[|>%@`" or line.startswith("<<") or re.match(r"""\s*"[^"]*\\""", line):
             busy = True
         m = re.match(r"""["']?(status|title)["']?\s*:(.*)$""", line, re.I)
         if m:
-            inline = m.group(2).strip()
-            if re.fullmatch(r"[|>][0-9+-]*\s*(#.*)?", inline):
+            inline = yaml_uncomment(m.group(2)).strip()
+            if re.fullmatch(r"[|>][0-9+-]*", inline):
                 inline = ""
-            value = " ".join([inline] + [l.strip() for l in block[i + 1:j] if l.strip()]).strip()
+            rest = [yaml_uncomment(l).strip() for l in block[i + 1:j]]
+            value = " ".join([inline] + [r for r in rest if r]).strip()
             if m.group(1).lower() == "status":
-                if re.search(r"""[*&!{%\\]""", value) or re.match(r"""["'\[\s-]*working\b""", value, re.I):
+                if (re.match(r"""["'\[\s-]*working\b""", value, re.I)
+                        or (value[:1] in "[-" and re.search(r"working", value, re.I))
+                        or re.match(r"""\s*(-\s+)?[\[{]?\s*[*&!%@`]""", value) or re.search(r"[\[,]\s*[*&!]", value)
+                        or "{" in value or (value.startswith('"') and "\\" in value)):
                     busy = True
             elif value.strip("\"' "):
                 title = value.strip("\"' ")
@@ -553,8 +583,19 @@ def task_note(root, path):
     rel = relative(root, path)
     if rel and rel.lower().startswith("team/tasks/"):
         return True
-    real_dir = os.path.dirname(os.path.realpath(path))
-    return any(real_dir == real for _top, real in task_dirs(root))
+    # Folders are compared as the disk sees them (device and inode), not by spelling.
+    try:
+        st = os.stat(os.path.dirname(os.path.realpath(path)))
+    except OSError:
+        return False
+    for _top, real in task_dirs(root):
+        try:
+            t = os.stat(real)
+        except OSError:
+            continue
+        if (t.st_dev, t.st_ino) == (st.st_dev, st.st_ino):
+            return True
+    return False
 
 
 def written_text(path, tool, inp):
