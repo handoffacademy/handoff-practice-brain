@@ -448,6 +448,27 @@ def case_folders(root, parts):
     return found
 
 
+WORKING = re.compile(r"---\n(?:(?!---\n)[^\n]*\n)*?status: *Working *\n(?:(?!---\n)[^\n]*\n)*?---(?:\n|$)")
+
+
+def helper_still_working(root):
+    """The title (or file name) of a task note whose top block says status: Working, the mark of
+    work a helper still has (rule 6 in CLAUDE.md), or None. Only the top block counts, so a
+    quoted email can never hold up a save."""
+    for folder in case_folders(root, ["team", "tasks"]):
+        for top, dirs, files in os.walk(os.path.join(root, folder)):
+            dirs[:] = sorted(d for d in dirs if not d.startswith("."))
+            for n in sorted(files):
+                if not n.lower().endswith(".md"):
+                    continue
+                text = read_small(os.path.join(top, n))
+                m = WORKING.match(text.replace("\r\n", "\n")) if text else None
+                if m:
+                    title = re.search(r"^title: *(.+)$", m.group(0), re.M)
+                    return (title.group(1).strip() if title else n[:-3])[:80]
+    return None
+
+
 def room_prints(root):
     budget = [64 << 20]
     tasks = "".join(notes_print(root, f, budget) for f in case_folders(root, ["team", "tasks"]))
@@ -1029,6 +1050,12 @@ def decide(tool, inp, root, brain, cwd=None, mode=None, agent_type=None):
             # Git acts on the folder the command runs in, so that must be the brain itself.
             if not same_folder(cwd, root):
                 return "deny", "Blocked: the save steps run only from the brain folder itself."
+            # A helper's draft is saved only after the assistant's check: no save while a helper still works.
+            busy = helper_still_working(root) if " commit " in cmd else None
+            if busy:
+                return "deny", ("Blocked: a helper is still working on \"%s\". Wait for its report and run the draft check "
+                                "on its draft, then save. If no helper is working on it any more, set that task to "
+                                "Needs you first." % busy)
             if re.search(r" (push|pull) ", cmd):
                 if not push_is_pinned(root, brain):
                     return "deny", "Blocked: the save goes only to the cloud copy recorded for this brain."
