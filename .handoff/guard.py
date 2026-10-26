@@ -517,21 +517,36 @@ def task_working(text):
     after it as its value, so a `---` or a `status:` inside another property's value never counts.
     A `status` property (any letter case, key quoted or not) is read by plain_status. `why` is
     "working" when a status says Working, "unreadable" when the note's top block or a status in it
-    is not one this check reads (an unclosed top block, a line break YAML readers disagree on, an
-    indented first property, a top-level line opening with a YAML indicator or merge, an escaped
-    key, a status that is not one plain value on its line), else "". Busy means either."""
-    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
-    if not lines or lines[0].rstrip() != "---":
+    is not one this check reads (an unclosed top block, a top block not opening on a plain `---`
+    first line, a line break YAML readers disagree on, an indented first property, a top-level
+    line opening with a YAML indicator or merge, an escaped key, a status that is not one plain
+    value on its line), else "". Busy means either."""
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    lines = text.split("\n")
+    # YAML readers skip blank, comment and directive lines before a top block, end a line at
+    # these characters too, and accept `---` followed by a space and more on its line. A top
+    # block opening any way but a plain `---` first line is read here as they would read it, and
+    # any status it could hold counts as one this check does not read. Delimiters are compared
+    # after removing spaces and tabs only (Python's plain rstrip also removes LINE_BREAKS).
+    scan = re.split("[\n" + "".join(LINE_BREAKS) + "]", text)
+    k = 0
+    while k < len(scan) and (not scan[k].strip(" \t") or scan[k].lstrip(" \t")[:1] in ("#", "%")):
+        k += 1
+    if k == len(scan) or not re.match(r"---([ \t]|$)", scan[k]):
         return False, "", ""
+    if k or lines[0].rstrip(" \t") != "---":
+        rest = scan[k][3:].strip(" \t")
+        if rest and not rest.startswith("#"):
+            return True, "", "unreadable"
+        busy, title, why = task_working("\n".join(["---"] + scan[k + 1:]))
+        return busy, title, "unreadable" if busy else ""
     block = []
     for line in lines[1:]:
-        if line.rstrip() == "---":
+        if line.rstrip(" \t") == "---":
             break
         block.append(line)
     else:
         return True, "", "unreadable"
-    # Some YAML readers end a line at these characters and others do not, so a top block holding
-    # one cannot be read the same way by everyone. Only the top block counts; the body never does.
     if any(c in line for line in block for c in LINE_BREAKS):
         return True, "", "unreadable"
     def continues(line):
