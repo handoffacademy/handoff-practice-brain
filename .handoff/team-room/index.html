@@ -96,7 +96,7 @@ section { display: grid; gap: 12px; min-width: 0; }
       <h1>Team Room</h1>
       <p class="biz" id="biz"></p>
     </div>
-    <p class="status" id="status"><span class="dot" aria-hidden="true"></span><span id="status-text">Loading your team…</span></p>
+    <p class="status" id="status"><span class="dot" aria-hidden="true"></span><span id="status-text">Loading your Team Room…</span></p>
   </header>
 
   <section aria-labelledby="floor-h">
@@ -121,7 +121,7 @@ section { display: grid; gap: 12px; min-width: 0; }
     </section>
   </div>
 
-  <p class="note">This page updates by itself as your team works: when work starts, when it is handed out, when a helper finishes and when it is saved. Only you can see it unless you share it.</p>
+  <p class="note">This page updates by itself as the work goes on: when work starts, when it is handed out, when a helper finishes and when it is saved. Only you can see it unless you share it.</p>
 </div>
 
 <script>
@@ -400,7 +400,7 @@ section { display: grid; gap: 12px; min-width: 0; }
     people.forEach(function (p) { drawDeskFront(p); });
     order.forEach(function (p) { if (p.mode !== "sit") drawPerson(p, t); });
     people.forEach(function (p) { if (p.say) bubble(p.say, p.x + 4, p.y - 1, p.accent || "#ffffff"); });
-    if (!people.length) label("Your team will show up here after its first update.", W / 2, 70, 8, colors["--ink"] === "#10120e" ? "#10120e" : "#f5fafc");
+    if (!people.length) label("Your assistant will show up here after its first update.", W / 2, 70, 8, colors["--ink"] === "#10120e" ? "#10120e" : "#f5fafc");
   }
 
   function describe() {
@@ -408,7 +408,7 @@ section { display: grid; gap: 12px; min-width: 0; }
     if (board) board.classList.toggle("busy", busy());
     canvas.setAttribute("aria-label", people.length
       ? "The office floor: " + people.map(function (p) { return p.name + " is " + p.state; }).join(", ") + (needsCount ? ". " + needsCount + " things wait on your desk." : ".") + (busy() ? "" : " Nobody is working right now.")
-      : "The office floor, empty until the team's first update.");
+      : "The office floor, empty until the first update.");
   }
   function setOffice(helpers, chat, tasks, brief) {
     // The page checks for news every two minutes; the same data leaves everyone and their queued walks alone.
@@ -427,7 +427,7 @@ section { display: grid; gap: 12px; min-width: 0; }
       var old = prev[name];
       var p = {
         i: i, name: name, state: st, desk: SLOTS[i], shirt: SHIRTS[i % SHIRTS.length], skin: SKIN[(i * 5 + 1) % SKIN.length],
-        hair: HAIR[(i * 3 + 2) % HAIR.length], chief: i === 0 && /chief/i.test(name + text(h.role)),
+        hair: HAIR[(i * 3 + 2) % HAIR.length], chief: i === 0 && /chief|executive assistant/i.test(name + text(h.role)),
         plan: [], mode: "sit", atSeat: true, carrying: false, mug: false, say: "", flash: 0
       };
       var s = seatOf(p);
@@ -478,14 +478,14 @@ section { display: grid; gap: 12px; min-width: 0; }
       var same = d.getUTCFullYear() === today.getFullYear() && d.getUTCMonth() === today.getMonth() && d.getUTCDate() === today.getDate();
       stale = !same;
       box.classList.toggle("resting", !same);
-      t.textContent = same ? "Updated today. " + (busy() ? "The team is working." : "Nobody is working right now.") : "The team is resting. Last update " + d.toLocaleDateString(undefined, { timeZone: "UTC" }) + ". Nobody is working right now.";
+      t.textContent = same ? "Updated today. " + (busy() ? "Work is under way." : "Nobody is working right now.") : "Everyone is resting. Last update " + d.toLocaleDateString(undefined, { timeZone: "UTC" }) + ". Nobody is working right now.";
       describe();
       return;
     }
     var age = Date.now() - updatedAt.getTime(), resting = age > 2 * 3600 * 1000;
     stale = resting;
     box.classList.toggle("resting", resting);
-    t.textContent = (resting ? "The team is resting. Last update " : "Updated ") + ago(Math.max(0, age)) + (busy() ? ". The team is working." : ". Nobody is working right now.");
+    t.textContent = (resting ? "Everyone is resting. Last update " : "Updated ") + ago(Math.max(0, age)) + (busy() ? ". Work is under way." : ". Nobody is working right now.");
     describe();
     box.title = updatedAt.toLocaleString();
   }
@@ -567,7 +567,7 @@ section { display: grid; gap: 12px; min-width: 0; }
     fetch("room.json", { cache: "no-store" })
       .then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
       .then(function (d) { if (!alive()) return; if (!d || typeof d !== "object" || Array.isArray(d)) throw new Error("shape"); render(d); })
-      .catch(function () { if (alive() && !updatedAt) empty("Waiting for your team's first update"); });
+      .catch(function () { if (alive() && !updatedAt) empty("Waiting for the first update"); });
   }
 
   size(); readColors();

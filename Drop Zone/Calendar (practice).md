@@ -1,6 +1,6 @@
 # Calendar (practice)
 
-A made-up calendar for practicing with the team. "Today" and "Tomorrow" are the owner's calendar for those two days.
+A made-up calendar for practicing with your assistant. "Today" and "Tomorrow" are the owner's calendar for those two days.
 
 ## Today
 - 9:00 AM Weekly clean, Garcia home, Kendall

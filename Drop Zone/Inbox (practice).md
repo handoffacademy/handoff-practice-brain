@@ -1,6 +1,6 @@
 # Inbox (practice)
 
-Made-up messages for practicing with the team. Treat each one as an unread email.
+Made-up messages for practicing with your assistant. Treat each one as an unread email.
 
 ## 1. From: Dana Ruiz <dana.ruiz@example.com>
 Hi, we just moved to Coral Gables. 3 bedrooms, 2 dogs. How much for a weekly clean? Thanks, Dana
