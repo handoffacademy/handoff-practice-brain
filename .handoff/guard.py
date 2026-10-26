@@ -112,6 +112,71 @@ LISTING = r"""ls(?: +(?:-[1aAlRtrhF]+|'[^'\n]*'|"[^"$`\\\n]*"|[A-Za-z0-9_./*~-]+
 # refusal holds this sentence (the guard-health check in CLAUDE.md, which the
 # template builds from this constant), so the check and the guard change together.
 GUARD_HEALTH = "Blocked: your assistant cannot run programs here."
+# The refusal carries that sentence only while the brain's settings are exactly
+# the template's (settings_form): the guard on every tool, the deny rules intact.
+# A hook narrowed to some tools, or a deny rule taken out, fails the check.
+SETTINGS_CHANGED = ("Blocked: this brain's safety settings are not in their usual form, so its guard may not cover "
+                    "every action. The owner restores .claude/settings.json from the Handoff template.")
+
+# Finds the guard from any folder inside the brain. A missing guard, or a
+# guard that crashes, blocks the action instead of letting it through.
+GUARD_COMMAND = (
+    'd="${CLAUDE_PROJECT_DIR:-$PWD}"; '
+    'while [ "$d" != "/" ] && [ ! -f "$d/.handoff/guard.py" ]; do d="$(dirname "$d")"; done; '
+    '[ -f "$d/.handoff/guard.py" ] || { echo "Blocked: the brain guard is missing." >&2; exit 2; }; '
+    'python3 "$d/.handoff/guard.py" || exit 2'
+)
+# At the start and end of a turn the guard only keeps the Team Room in step
+# with the work; if it is missing or fails, the session simply goes on.
+GUARD_SYNC_COMMAND = (
+    'd="${CLAUDE_PROJECT_DIR:-$PWD}"; '
+    'while [ "$d" != "/" ] && [ ! -f "$d/.handoff/guard.py" ]; do d="$(dirname "$d")"; done; '
+    '[ -f "$d/.handoff/guard.py" ] || exit 0; '
+    'python3 "$d/.handoff/guard.py" || exit 0'
+)
+
+
+def settings_form(practice=False):
+    """The brain's .claude/settings.json, the one form the template writes. The
+    guard is the boundary. The deny rules are a second layer: they hold in every
+    mode, but only for the tools and files they name. Nobody opens a web page, so
+    WebFetch is denied here in every brain. A practice brain also denies WebSearch
+    here; in a member's own brain the guard alone lets a helper whose job page
+    allows it search."""
+    deny = ["WebFetch"] + (["WebSearch"] if practice else []) + [
+        "mcp__*send*", "mcp__*reply*", "mcp__*forward*", "mcp__*trash*", "mcp__*delete*", "mcp__*spam*",
+        "mcp__*create_event*", "mcp__*update_event*", "mcp__*respond_to_event*",
+        # Microsoft 365 tools that change a mailbox, files or Teams beyond a draft.
+        "mcp__*teams_*", "mcp__*sharepoint_*", "mcp__*vacation*", "mcp__*filter*", "mcp__*outlook_modify*",
+        "mcp__*outlook_batch*", "mcp__*_label",
+        # A leading slash anchors at the brain's root, whatever folder a session works in.
+        "Edit(/**/CLAUDE.md)", "Edit(/**/AGENTS.md)", "Edit(/.claude/settings.json)",
+        "Edit(/.claude/output-styles/**)", "Edit(/.handoff/**)"]
+    return {
+        "outputStyle": "handoff",
+        # Saves are one plain line (the guard refuses anything else), so Claude
+        # Code adds no Co-Authored-By or Claude-Session lines to them.
+        "attribution": {"commit": "", "pr": "", "sessionUrl": False},
+        "permissions": {"deny": deny},
+        "hooks": {"PreToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": GUARD_COMMAND}]}],
+                  # After the first Team Room publish, the guard records the page's link itself.
+                  "PostToolUse": [{"matcher": "Artifact", "hooks": [{"type": "command", "command": GUARD_COMMAND}]}],
+                  # The guard holds a handoff, and the end of a turn, until the Team Room shows the latest notes.
+                  "SessionStart": [{"hooks": [{"type": "command", "command": GUARD_SYNC_COMMAND}]}],
+                  "Stop": [{"hooks": [{"type": "command", "command": GUARD_SYNC_COMMAND}]}]},
+    }
+
+
+def settings_intact(root, brain):
+    """The brain's .claude/settings.json is a plain file at its one place, holding
+    exactly the template's form for this kind of brain."""
+    path = os.path.join(root, ".claude", "settings.json")
+    if not exact_file(root, path, ".claude/settings.json") or not os.path.isfile(path):
+        return False
+    try:
+        return json.loads(read_small(path) or "") == settings_form(bool(brain.get("practice")))
+    except ValueError:
+        return False
 MARKER = os.path.join(".handoff", "brain.json")
 
 # The permission modes in which Claude's approval card waits for the owner's
@@ -971,6 +1036,8 @@ def decide(tool, inp, root, brain, cwd=None, mode=None, agent_type=None):
                 if problem:
                     return "deny", problem
             return "allow", ""
+        if not settings_intact(root, brain):
+            return "deny", SETTINGS_CHANGED
         return "deny", GUARD_HEALTH + " To see what a folder holds, run ls on its own. The save commands under Saving in CLAUDE.md run only exactly as written."
     if tool in ("WebFetch", "WebSearch"):
         return web_decision(tool, inp, root, brain, agent_type)
@@ -1003,8 +1070,10 @@ def main():
             print(json.dumps({"decision": "block", "reason": reason}))
         return 0
     tool, inp = str(data.get("tool_name", "")), data.get("tool_input") or {}
-    verdict, reason = decide(tool, inp, root, load_brain(root), data.get("cwd"), data.get("permission_mode"),
-                             data.get("agent_type"))
+    # Inside a helper Claude Code sends agent_type and agent_id; either one marks a helper's call,
+    # so a call that carries only an id still gets the helper rules (no draft tools, no saves, no web).
+    agent = data.get("agent_type") or ("(unnamed helper)" if data.get("agent_id") else None)
+    verdict, reason = decide(tool, inp, root, load_brain(root), data.get("cwd"), data.get("permission_mode"), agent)
     if verdict == "allow" and tool == "Artifact" and isinstance(inp, dict) and inp.get("action", "publish") == "publish":
         # An update that was tried counts, even if the platform then fails: a
         # room that cannot be reached never holds up the team's work.

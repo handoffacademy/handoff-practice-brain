@@ -1,6 +1,6 @@
 ---
 name: lead-check
-description: Checks the inbox at midday for new messages from leads and customers and leaves checked reply drafts, with no brief. Use on the midday scheduled run, or when the owner says "Run the lead-check training".
+description: Checks today's mail at midday for new messages from leads and customers and leaves reply drafts only, each checked, with no brief. Use on the midday scheduled run, or when the owner says "Run the lead-check training".
 ---
 1. Run the guard-health check (CLAUDE.md). Go on only if it passes; if it stops you, write and save nothing.
 2. Read `Team/Chief.md`, `Business/index.md` and the open task notes. Leave every task that already exists as it is. Then, if `Team/Room/link.md` exists, update the Team Room (steps 2 to 4 of the team-room training) so the owner sees you start work.
