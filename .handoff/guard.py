@@ -451,13 +451,22 @@ def case_folders(root, parts):
 TASK_HEAD = 64 * 1024  # a task note's top block is read from at most this much of its start
 
 
+def task_head(data):
+    """The part of a task note the guard reads, decoded the same way for a note on disk and for
+    text a write would leave: at most TASK_HEAD bytes, at most one leading BOM removed."""
+    if isinstance(data, str):
+        data = data.encode("utf-8", "surrogatepass")
+    text = data[:TASK_HEAD].decode("utf-8", "replace")
+    return text[1:] if text.startswith("\ufeff") else text
+
+
 def task_working(text):
-    """(busy, title) for a task note's text: busy when its top block marks it Working in any
-    spelling a person or model might write (any letter case, quoted, with a comment after), or
-    when a top block is opened and not closed within the part read (it cannot be checked).
-    Body text never counts, so a quoted email can never hold up a save."""
-    text = text.lstrip("\ufeff").replace("\r\n", "\n").replace("\r", "\n")
-    lines = text.split("\n")
+    """(busy, title) for a task note's head (task_head): busy when a top-level `status` property
+    in its top block says Working in any letter case (quoted, bracketed, with a comment after, or
+    as a block value on the next line), or when a top block is opened and not closed within the
+    head (it cannot be checked). Indented lines belong to another property's value and never count,
+    nor does body text, so a quoted email can never hold up a save."""
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     if not lines or lines[0].strip() != "---":
         return False, ""
     block = []
@@ -467,14 +476,18 @@ def task_working(text):
         block.append(line)
     else:
         return True, ""
-    title = ""
-    busy = False
-    for line in block:
-        if re.match(r"""\s*status\s*:\s*["'\[]*\s*working\b""", line, re.I):
-            busy = True
-        t = re.match(r"""\s*title\s*:\s*["']?(.*?)["']?\s*$""", line, re.I)
-        if t and t.group(1).strip():
-            title = t.group(1).strip()
+    title, busy = "", False
+    for i, line in enumerate(block):
+        m = re.match(r"""["']?(status|title)["']?\s*:\s*(.*)$""", line, re.I)
+        if not m:
+            continue
+        value = m.group(2).strip()
+        if re.fullmatch(r"[|>][+-]?[0-9]?\s*(#.*)?", value):
+            value = next((l.strip() for l in block[i + 1:] if l.strip()), "")
+        if m.group(1).lower() == "status":
+            busy = busy or re.match(r"""["'\[\s]*working\b""", value, re.I) is not None
+        elif value.strip("\"' "):
+            title = value.strip("\"' ")
     return busy, title
 
 
@@ -489,7 +502,7 @@ def helper_still_working(root):
                     continue
                 try:
                     with open(os.path.join(top, n), "rb") as f:
-                        head = f.read(TASK_HEAD).decode("utf-8", "replace")
+                        head = task_head(f.read(TASK_HEAD))
                 except OSError:
                     return n[:-3][:80]
                 busy, title = task_working(head)
@@ -1060,14 +1073,16 @@ def decide(tool, inp, root, brain, cwd=None, mode=None, agent_type=None):
     if tool in WRITE:
         path = inp.get("file_path") or inp.get("notebook_path")
         if write_allowed(root, path):
-            if agent_type and task_note(root, path) and os.path.isfile(path):
+            # The note as written and where it really lands: a link inside a notes folder can lead to a task.
+            if agent_type and (task_note(root, path) or task_note(os.path.realpath(root), os.path.realpath(path))) and os.path.isfile(path):
                 try:
                     with open(path, "rb") as f:
-                        was = task_working(f.read(TASK_HEAD).decode("utf-8", "replace"))[0]
+                        was = task_working(task_head(f.read(TASK_HEAD)))[0]
                 except OSError:
                     was = True
                 new = written_text(path, tool, inp)
-                if was and (new is None or not task_working(new[:TASK_HEAD])[0]):
+                # The text a write would leave is read exactly as the save check will read it from disk.
+                if was and (new is None or not task_working(task_head(new))[0]):
                     return "deny", ("Blocked: a helper leaves its task Working and hands the draft back. "
                                     "Your assistant moves the task on after the draft check.")
             return "allow", ""
