@@ -6,7 +6,7 @@ description: Turns a routine into a training followed the same way every time. U
 2. Ask the owner which routine, or read the `How We Work/` note they name.
 3. Write it as short numbered steps: what to read, what to write, what never to do. Drafts only; nothing is sent. If the training writes a draft for a person outside the business, one step says: Run the check-draft training on each draft before you leave it.
 4. Pick a name: lowercase words joined by dashes, 40 letters at most, never the name of a built-in training (CLAUDE.md lists them). Write a one-sentence description of when to use it, starting with a letter or number, with no colon and none of these marks: { } [ ] & * ! | > % @ ` #.
-5. Write a task note in `Team/Tasks/` with `status: Needs you`, `kind: training`, `name`, `title` (the description) and the steps in the body.
+5. Write a task note in `Team/Tasks/` with `status: Needs you`, `kind: training`, `name`, `title` (the description, inside double quotes) and the steps in the body.
 6. Show the owner the whole training exactly as it will be saved, say whether it is new or replaces one, and ask "Add this training?" Wait for the answer. The saved text is exactly:
    ```
    ---
