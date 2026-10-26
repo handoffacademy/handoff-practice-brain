@@ -461,59 +461,100 @@ def task_head(data):
 
 
 def task_working(text):
-    """(busy, title) for a task note's head (task_head): busy when a top-level `status` property
-    in its top block says Working in any letter case (quoted, bracketed, with a comment after, or
-    as a block value on the next line), or when a top block is opened and not closed within the
-    head (it cannot be checked). Indented lines belong to another property's value and never count,
-    nor does body text, so a quoted email can never hold up a save."""
+    """(busy, title) for a task note's head (task_head). The top block opens with `---` on the
+    first line and closes at the next `---` in the first column; one that does not close within
+    the head counts as busy. Each top-level property (a line in the first column) takes its
+    indented lines after it as part of its value, so a `---` or a `status:` inside another
+    property's value never counts. Busy when `status` (any letter case, key quoted or not) holds
+    Working in any spelling a YAML reader would take as Working (quoted, bracketed, a block value,
+    a value on the next lines), and also when its value, or any top-level line, uses a form this
+    check does not read (an anchor, alias, tag, flow collection, merge, complex key or escape):
+    a note that cannot be read plainly counts as still working. Body text never counts."""
     lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
-    if not lines or lines[0].strip() != "---":
+    if not lines or lines[0].rstrip() != "---":
         return False, ""
     block = []
     for line in lines[1:]:
-        if line.strip() == "---":
+        if line.rstrip() == "---":
             break
         block.append(line)
     else:
         return True, ""
     title, busy = "", False
-    for i, line in enumerate(block):
-        m = re.match(r"""["']?(status|title)["']?\s*:\s*(.*)$""", line, re.I)
-        if not m:
+    i = 0
+    while i < len(block):
+        line = block[i]
+        j = i + 1
+        while j < len(block) and (not block[j].strip() or block[j][:1] in (" ", "\t") or re.match(r"-(\s|$)", block[j])):
+            j += 1
+        if not line.strip() or line[:1] in (" ", "\t", "#"):
+            i = j if line.strip() and line[:1] in (" ", "\t") else i + 1
             continue
-        value = m.group(2).strip()
-        if re.fullmatch(r"[|>][+-]?[0-9]?\s*(#.*)?", value):
-            value = next((l.strip() for l in block[i + 1:] if l.strip()), "")
-        if m.group(1).lower() == "status":
-            busy = busy or re.match(r"""["'\[\s]*working\b""", value, re.I) is not None
-        elif value.strip("\"' "):
-            title = value.strip("\"' ")
+        if line[:1] in "?&*!{[|>%@`" or line.startswith("<<") or re.match(r"""\s*"[^"]*\\""", line):
+            busy = True
+        m = re.match(r"""["']?(status|title)["']?\s*:(.*)$""", line, re.I)
+        if m:
+            inline = m.group(2).strip()
+            if re.fullmatch(r"[|>][0-9+-]*\s*(#.*)?", inline):
+                inline = ""
+            value = " ".join([inline] + [l.strip() for l in block[i + 1:j] if l.strip()]).strip()
+            if m.group(1).lower() == "status":
+                if re.search(r"""[*&!{%\\]""", value) or re.match(r"""["'\[\s-]*working\b""", value, re.I):
+                    busy = True
+            elif value.strip("\"' "):
+                title = value.strip("\"' ")
+        i = j
     return busy, title
 
 
-def helper_still_working(root):
-    """A label for the first task note under Team/Tasks (any letter case, any depth) that a helper
-    still has (rule 6 in CLAUDE.md), or None. A note that cannot be read counts as still working."""
+def task_dirs(root):
+    """Every real folder that holds task notes: Team/Tasks in any letter case, its subfolders,
+    with links followed (each real folder once, so a loop ends)."""
+    seen, out = set(), []
     for folder in case_folders(root, ["team", "tasks"]):
-        for top, dirs, files in os.walk(os.path.join(root, folder)):
+        for top, dirs, files in os.walk(os.path.join(root, folder), followlinks=True):
+            real = os.path.realpath(top)
+            if real in seen:
+                dirs[:] = []
+                continue
+            seen.add(real)
+            out.append((top, real))
             dirs[:] = sorted(d for d in dirs if not d.startswith("."))
-            for n in sorted(files):
-                if not n.lower().endswith(".md"):
-                    continue
-                try:
-                    with open(os.path.join(top, n), "rb") as f:
-                        head = task_head(f.read(TASK_HEAD))
-                except OSError:
-                    return n[:-3][:80]
-                busy, title = task_working(head)
-                if busy:
-                    return (title or n[:-3])[:80]
+    return out
+
+
+def helper_still_working(root):
+    """A label for the first task note (task_dirs) that a helper still has (rule 6 in CLAUDE.md),
+    or None. A note that cannot be read counts as still working."""
+    for top, _real in task_dirs(root):
+        try:
+            names = sorted(os.listdir(top))
+        except OSError:
+            return os.path.basename(top)[:80] or "a task note"
+        for n in names:
+            p = os.path.join(top, n)
+            if not n.lower().endswith(".md") or not os.path.isfile(p):
+                continue
+            try:
+                with open(p, "rb") as f:
+                    head = task_head(f.read(TASK_HEAD))
+            except OSError:
+                return n[:-3][:80]
+            busy, title = task_working(head)
+            if busy:
+                return (title or n[:-3])[:80]
     return None
 
 
 def task_note(root, path):
-    rel = relative(root, path) if isinstance(path, str) else None
-    return bool(rel) and rel.lower().startswith("team/tasks/") and rel.lower().endswith(".md")
+    """A task note as written, or one whose real folder is a task folder (task_dirs), however it is reached."""
+    if not isinstance(path, str) or not path.lower().endswith(".md"):
+        return False
+    rel = relative(root, path)
+    if rel and rel.lower().startswith("team/tasks/"):
+        return True
+    real_dir = os.path.dirname(os.path.realpath(path))
+    return any(real_dir == real for _top, real in task_dirs(root))
 
 
 def written_text(path, tool, inp):
@@ -1074,7 +1115,7 @@ def decide(tool, inp, root, brain, cwd=None, mode=None, agent_type=None):
         path = inp.get("file_path") or inp.get("notebook_path")
         if write_allowed(root, path):
             # The note as written and where it really lands: a link inside a notes folder can lead to a task.
-            if agent_type and (task_note(root, path) or task_note(os.path.realpath(root), os.path.realpath(path))) and os.path.isfile(path):
+            if agent_type and task_note(root, path) and os.path.isfile(path):
                 try:
                     with open(path, "rb") as f:
                         was = task_working(task_head(f.read(TASK_HEAD)))[0]
