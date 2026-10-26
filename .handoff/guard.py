@@ -448,25 +448,80 @@ def case_folders(root, parts):
     return found
 
 
-WORKING = re.compile(r"---\n(?:(?!---\n)[^\n]*\n)*?status: *Working *\n(?:(?!---\n)[^\n]*\n)*?---(?:\n|$)")
+TASK_HEAD = 64 * 1024  # a task note's top block is read from at most this much of its start
+
+
+def task_working(text):
+    """(busy, title) for a task note's text: busy when its top block marks it Working in any
+    spelling a person or model might write (any letter case, quoted, with a comment after), or
+    when a top block is opened and not closed within the part read (it cannot be checked).
+    Body text never counts, so a quoted email can never hold up a save."""
+    text = text.lstrip("\ufeff").replace("\r\n", "\n").replace("\r", "\n")
+    lines = text.split("\n")
+    if not lines or lines[0].strip() != "---":
+        return False, ""
+    block = []
+    for line in lines[1:]:
+        if line.strip() == "---":
+            break
+        block.append(line)
+    else:
+        return True, ""
+    title = ""
+    busy = False
+    for line in block:
+        if re.match(r"""\s*status\s*:\s*["'\[]*\s*working\b""", line, re.I):
+            busy = True
+        t = re.match(r"""\s*title\s*:\s*["']?(.*?)["']?\s*$""", line, re.I)
+        if t and t.group(1).strip():
+            title = t.group(1).strip()
+    return busy, title
 
 
 def helper_still_working(root):
-    """The title (or file name) of a task note whose top block says status: Working, the mark of
-    work a helper still has (rule 6 in CLAUDE.md), or None. Only the top block counts, so a
-    quoted email can never hold up a save."""
+    """A label for the first task note under Team/Tasks (any letter case, any depth) that a helper
+    still has (rule 6 in CLAUDE.md), or None. A note that cannot be read counts as still working."""
     for folder in case_folders(root, ["team", "tasks"]):
         for top, dirs, files in os.walk(os.path.join(root, folder)):
             dirs[:] = sorted(d for d in dirs if not d.startswith("."))
             for n in sorted(files):
                 if not n.lower().endswith(".md"):
                     continue
-                text = read_small(os.path.join(top, n))
-                m = WORKING.match(text.replace("\r\n", "\n")) if text else None
-                if m:
-                    title = re.search(r"^title: *(.+)$", m.group(0), re.M)
-                    return (title.group(1).strip() if title else n[:-3])[:80]
+                try:
+                    with open(os.path.join(top, n), "rb") as f:
+                        head = f.read(TASK_HEAD).decode("utf-8", "replace")
+                except OSError:
+                    return n[:-3][:80]
+                busy, title = task_working(head)
+                if busy:
+                    return (title or n[:-3])[:80]
     return None
+
+
+def task_note(root, path):
+    rel = relative(root, path) if isinstance(path, str) else None
+    return bool(rel) and rel.lower().startswith("team/tasks/") and rel.lower().endswith(".md")
+
+
+def written_text(path, tool, inp):
+    """The whole new text a Write, Edit or MultiEdit would leave, or None when it cannot be worked out."""
+    if tool == "Write":
+        return inp.get("content") if isinstance(inp.get("content"), str) else None
+    try:
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+    except (OSError, UnicodeDecodeError):
+        return None
+    edits = inp.get("edits") if tool == "MultiEdit" else [inp]
+    if not isinstance(edits, list):
+        return None
+    for e in edits:
+        if not isinstance(e, dict) or not isinstance(e.get("old_string"), str) or not isinstance(e.get("new_string"), str):
+            return None
+        if e["old_string"] not in text:
+            return None
+        text = text.replace(e["old_string"], e["new_string"]) if e.get("replace_all") else text.replace(e["old_string"], e["new_string"], 1)
+    return text
 
 
 def room_prints(root):
@@ -957,6 +1012,17 @@ def settings_reaching_brain(root):
     return sorted(found)
 
 
+def index_matches_notes(root):
+    """Nothing in the brain's tracked files changed since the add step, so a commit saves exactly
+    the notes as they are now (and as the Working check just saw them)."""
+    try:
+        out = subprocess.run(["git", "-C", root, "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null",
+                              "diff", "--quiet", "--no-ext-diff", "--no-textconv"], capture_output=True, timeout=20)
+    except Exception:
+        return False
+    return out.returncode == 0
+
+
 def current_branch(root):
     try:
         out = subprocess.run(["git", "-C", root, "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null",
@@ -994,6 +1060,16 @@ def decide(tool, inp, root, brain, cwd=None, mode=None, agent_type=None):
     if tool in WRITE:
         path = inp.get("file_path") or inp.get("notebook_path")
         if write_allowed(root, path):
+            if agent_type and task_note(root, path) and os.path.isfile(path):
+                try:
+                    with open(path, "rb") as f:
+                        was = task_working(f.read(TASK_HEAD).decode("utf-8", "replace"))[0]
+                except OSError:
+                    was = True
+                new = written_text(path, tool, inp)
+                if was and (new is None or not task_working(new[:TASK_HEAD])[0]):
+                    return "deny", ("Blocked: a helper leaves its task Working and hands the draft back. "
+                                    "Your assistant moves the task on after the draft check.")
             return "allow", ""
         room = room_write(root, tool, path, inp)
         if room:
@@ -1056,6 +1132,9 @@ def decide(tool, inp, root, brain, cwd=None, mode=None, agent_type=None):
                 return "deny", ("Blocked: a helper is still working on \"%s\". Wait for its report and run the draft check "
                                 "on its draft, then save. If no helper is working on it any more, set that task to "
                                 "Needs you first." % busy)
+            if " commit " in cmd and not index_matches_notes(root):
+                return "deny", ("Blocked: the notes changed after the first save step. Run the save steps again from "
+                                "step 1, so the save holds exactly what was checked.")
             if re.search(r" (push|pull) ", cmd):
                 if not push_is_pinned(root, brain):
                     return "deny", "Blocked: the save goes only to the cloud copy recorded for this brain."
