@@ -525,11 +525,16 @@ def task_working(text):
                 inline = ""
             rest = [yaml_uncomment(l).strip() for l in block[i + 1:j]]
             value = " ".join([inline] + [r for r in rest if r]).strip()
+            raw = m.group(2) + "\n" + "\n".join(block[i + 1:j])
             if m.group(1).lower() == "status":
-                if (re.match(r"""["'\[\s-]*working\b""", value, re.I)
-                        or (value[:1] in "[-" and re.search(r"working", value, re.I))
-                        or re.match(r"""\s*(-\s+)?[\[{]?\s*[*&!%@`]""", value) or re.search(r"[\[,]\s*[*&!]", value)
-                        or "{" in value or (value.startswith('"') and "\\" in value)):
+                # Working read plainly; a list or flow entry holding it; an anchor, alias, tag or other
+                # indicator at the start of the value, a list item or a flow entry; a flow mapping; and
+                # any backslash at all (an escape this check does not decode, comments included).
+                entries = re.split(r"""[\[\],]|(?:^|\s)-(?=\s|$)""", value) if value[:1] in "[-" else [value]
+                if (any(re.match(r"""["'\s]*working\b""", e, re.I) for e in entries)
+                        or re.search(r"""(^|[\[,{]|-\s)\s*[*&!%@`]""", value)
+                        or "{" in value or "\\" in raw
+                        or inline.count("[") > inline.count("]")):
                     busy = True
             elif value.strip("\"' "):
                 title = value.strip("\"' ")
@@ -583,18 +588,25 @@ def task_note(root, path):
     rel = relative(root, path)
     if rel and rel.lower().startswith("team/tasks/"):
         return True
-    # Folders are compared as the disk sees them (device and inode), not by spelling.
-    try:
-        st = os.stat(os.path.dirname(os.path.realpath(path)))
-    except OSError:
-        return False
-    for _top, real in task_dirs(root):
+    # Folders and files are compared as the disk sees them (device and inode), not by spelling:
+    # the written file's folder is a task folder, or the file is one a task folder links to.
+    def ident(p):
         try:
-            t = os.stat(real)
+            st = os.stat(p)
         except OSError:
-            continue
-        if (t.st_dev, t.st_ino) == (st.st_dev, st.st_ino):
+            return None
+        return (st.st_dev, st.st_ino)
+    folder, file = ident(os.path.dirname(os.path.realpath(path))), ident(path)
+    for top, real in task_dirs(root):
+        if folder is not None and ident(real) == folder:
             return True
+        if file is not None:
+            try:
+                names = os.listdir(top)
+            except OSError:
+                continue
+            if any(n.lower().endswith(".md") and ident(os.path.join(top, n)) == file for n in names):
+                return True
     return False
 
 
